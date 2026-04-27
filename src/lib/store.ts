@@ -38,10 +38,15 @@ function write<T>(key: string, val: T) {
   emit();
 }
 
+const SEED_VERSION = "2";
 export function ensureSeeded() {
   if (typeof window === "undefined") return;
-  if (!localStorage.getItem(KEYS.products)) write(KEYS.products, seedProducts);
-  if (!localStorage.getItem(KEYS.categories)) write(KEYS.categories, defaultCategories);
+  const v = localStorage.getItem("genz.seedVersion");
+  if (v !== SEED_VERSION) {
+    write(KEYS.products, seedProducts);
+    write(KEYS.categories, defaultCategories);
+    localStorage.setItem("genz.seedVersion", SEED_VERSION);
+  }
   if (!localStorage.getItem(KEYS.users)) {
     write(KEYS.users, [{ id: "admin", email: "admin@genz.shop", password: "admin123", name: "Admin", isAdmin: true }]);
   }
