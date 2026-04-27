@@ -59,7 +59,7 @@ function Shop() {
           </div>
           <select
             value={search.sort}
-            onChange={(e) => navigate({ search: (s) => ({ ...s, sort: e.target.value as any }) })}
+            onChange={(e) => navigate({ search: (s: ShopSearch) => ({ ...s, sort: e.target.value as ShopSearch["sort"] }) })}
             className="sticker-sm rounded-full px-4 py-2 bg-white font-bold text-sm"
           >
             <option value="new">Newest</option>
@@ -74,7 +74,7 @@ function Shop() {
             return (
               <button
                 key={c.value}
-                onClick={() => navigate({ search: (s) => ({ ...s, category: c.value }) })}
+                onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, category: c.value }) })}
                 className={`chip ${active ? "bg-pop-pink text-white" : ""}`}
               >
                 {c.label}
@@ -82,7 +82,7 @@ function Shop() {
             );
           })}
           {search.q && (
-            <button onClick={() => navigate({ search: (s) => ({ ...s, q: "" }) })} className="chip bg-ink text-paper">
+            <button onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, q: "" }) })} className="chip bg-ink text-paper">
               clear "{search.q}" ✕
             </button>
           )}
