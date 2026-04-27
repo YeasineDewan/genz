@@ -2,7 +2,7 @@
 // the read/write helpers with fetch() calls — public API is stable.
 import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
-import type { Product, CartItem, User, Order } from "./types";
+import type { Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent } from "./types";
 
 const KEYS = {
   products: "genz.products",
@@ -10,7 +10,15 @@ const KEYS = {
   user: "genz.user",
   users: "genz.users",
   orders: "genz.orders",
+  categories: "genz.categories",
 } as const;
+
+export const defaultCategories: CategoryDef[] = [
+  { id: "c-tops", slug: "tops", name: "Tops", emoji: "👕" },
+  { id: "c-bottoms", slug: "bottoms", name: "Bottoms", emoji: "👖" },
+  { id: "c-shoes", slug: "shoes", name: "Shoes", emoji: "👟" },
+  { id: "c-accessories", slug: "accessories", name: "Accessories", emoji: "🕶️" },
+];
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -33,11 +41,21 @@ function write<T>(key: string, val: T) {
 export function ensureSeeded() {
   if (typeof window === "undefined") return;
   if (!localStorage.getItem(KEYS.products)) write(KEYS.products, seedProducts);
+  if (!localStorage.getItem(KEYS.categories)) write(KEYS.categories, defaultCategories);
   if (!localStorage.getItem(KEYS.users)) {
-    // Seed an admin so the user can preview the panel
     write(KEYS.users, [{ id: "admin", email: "admin@genz.shop", password: "admin123", name: "Admin", isAdmin: true }]);
   }
 }
+
+// --- Categories ---
+export const getCategories = (): CategoryDef[] => read(KEYS.categories, defaultCategories);
+export const saveCategory = (c: CategoryDef) => {
+  const list = getCategories();
+  const i = list.findIndex((x) => x.id === c.id);
+  if (i >= 0) list[i] = c; else list.push(c);
+  write(KEYS.categories, list);
+};
+export const deleteCategory = (id: string) => write(KEYS.categories, getCategories().filter((c) => c.id !== id));
 
 // --- Products ---
 export const getProducts = (): Product[] => read(KEYS.products, seedProducts);
@@ -93,13 +111,43 @@ export const getOrders = (userId?: string): Order[] => {
   const all = read<Order[]>(KEYS.orders, []);
   return userId ? all.filter((o) => o.userId === userId) : all;
 };
-export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status">): Order => {
-  const order: Order = { ...o, id: crypto.randomUUID(), createdAt: Date.now(), status: "pending" };
+export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "tracking" | "trackingNumber" | "carrier">): Order => {
+  const now = Date.now();
+  const trackingNumber = "GZ" + Math.random().toString(36).slice(2, 10).toUpperCase();
+  const order: Order = {
+    ...o,
+    id: crypto.randomUUID(),
+    createdAt: now,
+    status: "pending",
+    trackingNumber,
+    carrier: "GenZ Express",
+    tracking: [{ status: "pending", at: now, note: "Order received" }],
+  };
   const all = read<Order[]>(KEYS.orders, []);
   all.unshift(order);
   write(KEYS.orders, all);
+  // Decrement stock
+  const products = getProducts();
+  o.items.forEach((it) => {
+    const p = products.find((x) => x.id === it.productId);
+    if (p) p.stock = Math.max(0, p.stock - it.qty);
+  });
+  write(KEYS.products, products);
   return order;
 };
+
+export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: string): Order | null => {
+  const all = read<Order[]>(KEYS.orders, []);
+  const o = all.find((x) => x.id === orderId);
+  if (!o) return null;
+  o.status = status;
+  o.tracking = [...(o.tracking ?? []), { status, at: Date.now(), note }];
+  write(KEYS.orders, all);
+  return o;
+};
+
+export const getOrder = (id: string): Order | undefined =>
+  read<Order[]>(KEYS.orders, []).find((o) => o.id === id);
 
 // --- React hooks ---
 function useStore<T>(getter: () => T): T {
@@ -109,6 +157,8 @@ export const useProducts = () => useStore(getProducts);
 export const useCart = () => useStore(getCart);
 export const useUser = () => useStore(getCurrentUser);
 export const useOrders = (userId?: string) => useStore(() => getOrders(userId));
+export const useCategories = () => useStore(getCategories);
+export const useOrder = (id: string) => useStore(() => getOrder(id));
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
