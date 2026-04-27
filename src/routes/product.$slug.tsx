@@ -1,5 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
+import { ProductGallery } from "@/components/ProductGallery";
 import { useProducts, addToCart, formatPrice } from "@/lib/store";
 import { useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
@@ -50,10 +51,7 @@ function ProductPage() {
   return (
     <Layout>
       <section className="mx-auto max-w-6xl px-4 py-10 grid md:grid-cols-2 gap-10">
-        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-          className="sticker-lg rounded-3xl overflow-hidden bg-pop-yellow">
-          <img src={product.image} alt={product.name} width={800} height={800} className="w-full h-auto mix-blend-multiply" />
-        </motion.div>
+        <ProductGallery images={product.images && product.images.length > 0 ? product.images : [product.image]} alt={product.name} />
 
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
           <div className="flex gap-2 mb-3">
