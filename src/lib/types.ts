@@ -1,11 +1,19 @@
-export type Category = "tops" | "bottoms" | "shoes" | "accessories";
+export type Category = string;
+
+export interface CategoryDef {
+  id: string;
+  slug: string;
+  name: string;
+  emoji?: string;
+}
 
 export interface Product {
   id: string;
   slug: string;
   name: string;
   price: number;
-  image: string;
+  image: string;          // primary / cover
+  images?: string[];      // gallery (includes primary at index 0)
   category: Category;
   colors: string[];
   sizes: string[];
@@ -28,12 +36,23 @@ export interface User {
   isAdmin: boolean;
 }
 
+export type OrderStatus = "pending" | "processing" | "shipped" | "out_for_delivery" | "delivered" | "cancelled";
+
+export interface TrackingEvent {
+  status: OrderStatus;
+  at: number;
+  note?: string;
+}
+
 export interface Order {
   id: string;
   userId: string;
   items: CartItem[];
   total: number;
-  status: "pending" | "shipped" | "delivered";
+  status: OrderStatus;
   createdAt: number;
   shipping: { name: string; address: string; city: string; zip: string; country: string };
+  tracking?: TrackingEvent[];
+  trackingNumber?: string;
+  carrier?: string;
 }
