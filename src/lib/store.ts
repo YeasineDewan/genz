@@ -384,6 +384,28 @@ export const useOrder = (id: string) => {
   return useMemo(() => all.find((o) => o.id === id), [all, id]);
 };
 
+export const useReviews = () => useStore(getReviews);
+export const useProductReviews = (productId: string) => {
+  const all = useStore(getReviews);
+  return useMemo(() => all.filter((r) => r.productId === productId), [all, productId]);
+};
+export const useProductRating = (productId: string) => {
+  const all = useStore(getReviews);
+  return useMemo(() => {
+    const rs = all.filter((r) => r.productId === productId);
+    return rs.length === 0
+      ? { avg: 0, count: 0 }
+      : { avg: rs.reduce((s, r) => s + r.rating, 0) / rs.length, count: rs.length };
+  }, [all, productId]);
+};
+export const useWishlist = () => {
+  const all = useStore(() => read<Record<string, string[]>>(KEYS.wishlist, {}));
+  const user = useUser();
+  return useMemo(() => all[user?.id ?? "guest"] ?? [], [all, user]);
+};
+export const useRecent = () => useStore(() => read<string[]>(KEYS.recent, []));
+export const useCoupons = () => useStore(getCoupons);
+
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
 
