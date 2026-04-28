@@ -314,24 +314,70 @@ function Products() {
   );
 }
 
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2MB per file
+const MAX_IMAGES = 8;
+const MIN_IMAGES = 1;
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
 function ProductDrawer({ product, onClose }: { product: Product; onClose: () => void }) {
   const categories = useCategories();
   const [p, setP] = useState<Product>({ ...product, images: product.images ?? (product.image ? [product.image] : []) });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = (): { ok: boolean; errs: Record<string, string> } => {
+    const errs: Record<string, string> = {};
+    if (!p.name.trim()) errs.name = "Name is required";
+    else if (p.name.length > 80) errs.name = "Name must be ≤ 80 chars";
+    if (!p.description.trim()) errs.description = "Description is required";
+    else if (p.description.length > 1000) errs.description = "Description must be ≤ 1000 chars";
+    if (!(p.price > 0)) errs.price = "Price must be greater than 0";
+    if (!Number.isFinite(p.stock) || p.stock < 0) errs.stock = "Stock must be 0 or more";
+    if (!p.category) errs.category = "Category is required";
+    if (p.colors.length === 0) errs.colors = "At least one color required";
+    if (p.sizes.length === 0) errs.sizes = "At least one size required";
+    const imgs = p.images ?? [];
+    if (imgs.length < MIN_IMAGES) errs.images = `At least ${MIN_IMAGES} image required`;
+    else if (imgs.length > MAX_IMAGES) errs.images = `Max ${MAX_IMAGES} images allowed`;
+    return { ok: Object.keys(errs).length === 0, errs };
+  };
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
+    const { ok, errs } = validate();
+    setErrors(errs);
+    if (!ok) {
+      toast.error(Object.values(errs)[0] ?? "Please fix the errors");
+      return;
+    }
     const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const images = p.images ?? [];
-    const image = images[0] ?? p.image;
-    if (!image) { toast.error("Add at least one image"); return; }
-    saveProduct({ ...p, slug, image, images });
+    const image = images[0];
+    saveProduct(
+      { ...p, slug, image, images },
+      { stockSource: product.name ? "product_edit" : "product_create", stockNote: `Saved by admin` },
+    );
     toast.success("Saved");
     onClose();
   };
 
   const onFiles = (files: FileList) => {
     const arr = Array.from(files);
-    Promise.all(arr.map((f) => new Promise<string>((res) => {
+    const current = p.images ?? [];
+    const accepted: File[] = [];
+    const skipped: string[] = [];
+    arr.forEach((f) => {
+      if (!ACCEPTED_TYPES.includes(f.type)) { skipped.push(`${f.name}: unsupported type`); return; }
+      if (f.size > MAX_IMAGE_BYTES) { skipped.push(`${f.name}: over 2MB`); return; }
+      accepted.push(f);
+    });
+    const room = MAX_IMAGES - current.length;
+    if (accepted.length > room) {
+      skipped.push(`${accepted.length - room} extra dropped (max ${MAX_IMAGES})`);
+      accepted.length = room;
+    }
+    if (skipped.length) toast.error(skipped.join(" · "));
+    if (accepted.length === 0) return;
+    Promise.all(accepted.map((f) => new Promise<string>((res) => {
       const r = new FileReader();
       r.onload = () => res(String(r.result));
       r.readAsDataURL(f);
