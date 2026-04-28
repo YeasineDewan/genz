@@ -283,11 +283,19 @@ function useStore<T>(getter: () => T): T {
 export const useProducts = () => useStore(getProducts);
 export const useCart = () => useStore(getCart);
 export const useUser = () => useStore(getCurrentUser);
-export const useOrders = (userId?: string) => useStore(() => getOrders(userId));
 export const useCategories = () => useStore(getCategories);
-export const useOrder = (id: string) => useStore(() => getOrder(id));
 export const useFunnelEvents = () => useStore(getFunnelEvents);
 export const useStockAudit = () => useStore(getStockAudit);
+// Derived hooks: subscribe to the full underlying list, then derive with useMemo
+// to keep the returned reference stable across renders.
+export const useOrders = (userId?: string) => {
+  const all = useStore(() => read<Order[]>(KEYS.orders, []));
+  return useMemo(() => (userId ? all.filter((o) => o.userId === userId) : all), [all, userId]);
+};
+export const useOrder = (id: string) => {
+  const all = useStore(() => read<Order[]>(KEYS.orders, []));
+  return useMemo(() => all.find((o) => o.id === id), [all, id]);
+};
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
