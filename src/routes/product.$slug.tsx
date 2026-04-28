@@ -1,8 +1,12 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductGallery } from "@/components/ProductGallery";
-import { useProducts, addToCart, formatPrice } from "@/lib/store";
-import { useState } from "react";
+import { Reviews } from "@/components/Reviews";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { WishlistButton } from "@/components/WishlistButton";
+import { Stars } from "@/components/Stars";
+import { useProducts, addToCart, formatPrice, trackRecent, useProductRating } from "@/lib/store";
+import { useEffect, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -35,6 +39,9 @@ function ProductPage() {
   const [size, setSize] = useState(product.sizes[0]);
   const [color, setColor] = useState(product.colors[0]);
   const [qty, setQty] = useState(1);
+  const rating = useProductRating(product.id);
+
+  useEffect(() => { trackRecent(product.id); }, [product.id]);
 
   const colorMap: Record<string, string> = {
     pink: "bg-pop-pink", cyan: "bg-pop-cyan", yellow: "bg-pop-yellow", orange: "bg-pop-orange",
@@ -59,6 +66,7 @@ function ProductPage() {
             <span className="chip">{product.category}</span>
           </div>
           <h1 className="text-5xl">{product.name}</h1>
+          <div className="mt-2"><Stars value={rating.avg} size={16} count={rating.count}/></div>
           <div className="mt-3 font-display text-3xl">{formatPrice(product.price)}</div>
           <p className="mt-5 text-muted-foreground">{product.description}</p>
 
