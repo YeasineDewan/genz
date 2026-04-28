@@ -101,8 +101,19 @@ function Dashboard() {
       .map(([id, qty]) => ({ product: products.find((p) => p.id === id), qty }))
       .filter((x) => x.product);
 
-    return { revenue, customers, lowStock, pending, days, max, best };
-  }, [orders, products]);
+    // Conversion funnel — last 7 days
+    const weekStart = Date.now() - 7 * 86400000;
+    const recent = funnel.filter((f) => f.at >= weekStart);
+    const cartViews = recent.filter((f) => f.type === "cart_viewed").length;
+    const checkouts = recent.filter((f) => f.type === "checkout_started").length;
+    const completions = recent.filter((f) => f.type === "order_completed").length;
+    const cartToCheckout = cartViews > 0 ? (checkouts / cartViews) * 100 : 0;
+    const checkoutToOrder = checkouts > 0 ? (completions / checkouts) * 100 : 0;
+    const overall = cartViews > 0 ? (completions / cartViews) * 100 : 0;
+
+    return { revenue, customers, lowStock, pending, days, max, best,
+      cartViews, checkouts, completions, cartToCheckout, checkoutToOrder, overall };
+  }, [orders, products, funnel]);
 
   return (
     <div className="space-y-6">
