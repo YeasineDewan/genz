@@ -281,6 +281,88 @@ export const appendStockAudit = (entry: StockAuditEntry) => {
   write(KEYS.stockAudit, list);
 };
 
+// --- Reviews ---
+export const getReviews = (): Review[] => read(KEYS.reviews, []);
+export const getProductReviews = (productId: string) => getReviews().filter((r) => r.productId === productId);
+export const addReview = (r: Omit<Review, "id" | "at">): Review => {
+  const review: Review = { ...r, id: crypto.randomUUID(), at: Date.now() };
+  const list = getReviews();
+  list.unshift(review);
+  write(KEYS.reviews, list);
+  return review;
+};
+export const deleteReview = (id: string) => write(KEYS.reviews, getReviews().filter((r) => r.id !== id));
+export const productRating = (productId: string): { avg: number; count: number } => {
+  const rs = getProductReviews(productId);
+  if (rs.length === 0) return { avg: 0, count: 0 };
+  return { avg: rs.reduce((s, r) => s + r.rating, 0) / rs.length, count: rs.length };
+};
+
+// --- Wishlist (per current user, fallback to "guest") ---
+type WishMap = Record<string, string[]>;
+const wishKey = () => getCurrentUser()?.id ?? "guest";
+export const getWishlist = (): string[] => {
+  const all = read<WishMap>(KEYS.wishlist, {});
+  return all[wishKey()] ?? [];
+};
+export const toggleWishlist = (productId: string): boolean => {
+  const all = read<WishMap>(KEYS.wishlist, {});
+  const k = wishKey();
+  const cur = new Set(all[k] ?? []);
+  const added = !cur.has(productId);
+  if (added) cur.add(productId); else cur.delete(productId);
+  all[k] = [...cur];
+  write(KEYS.wishlist, all);
+  return added;
+};
+export const isWishlisted = (productId: string) => getWishlist().includes(productId);
+
+// --- Recently viewed ---
+export const getRecent = (): string[] => read(KEYS.recent, []);
+export const trackRecent = (productId: string) => {
+  const cur = getRecent().filter((id) => id !== productId);
+  cur.unshift(productId);
+  if (cur.length > 12) cur.length = 12;
+  write(KEYS.recent, cur);
+};
+
+// --- Coupons ---
+export const getCoupons = (): Coupon[] => read(KEYS.coupons, []);
+export const saveCoupon = (c: Coupon) => {
+  const list = getCoupons();
+  const i = list.findIndex((x) => x.id === c.id);
+  if (i >= 0) list[i] = c; else list.push(c);
+  write(KEYS.coupons, list);
+};
+export const deleteCoupon = (id: string) => write(KEYS.coupons, getCoupons().filter((c) => c.id !== id));
+export const findCoupon = (code: string): Coupon | undefined =>
+  getCoupons().find((c) => c.code.toUpperCase() === code.trim().toUpperCase());
+
+export type CouponValidation =
+  | { ok: true; coupon: Coupon; discount: number }
+  | { ok: false; reason: string };
+
+export const validateCoupon = (code: string, subtotal: number): CouponValidation => {
+  const c = findCoupon(code);
+  if (!c) return { ok: false, reason: "Code not found" };
+  if (!c.active) return { ok: false, reason: "Code is inactive" };
+  if (c.expiresAt && c.expiresAt < Date.now()) return { ok: false, reason: "Code has expired" };
+  if (c.maxUses && c.uses >= c.maxUses) return { ok: false, reason: "Code usage limit reached" };
+  if (c.minSubtotal && subtotal < c.minSubtotal) return { ok: false, reason: `Min subtotal $${c.minSubtotal}` };
+  const discount = c.type === "percent"
+    ? Math.min(subtotal, (subtotal * c.value) / 100)
+    : Math.min(subtotal, c.value);
+  return { ok: true, coupon: c, discount };
+};
+
+export const consumeCoupon = (id: string) => {
+  const list = getCoupons();
+  const c = list.find((x) => x.id === id);
+  if (!c) return;
+  c.uses = (c.uses ?? 0) + 1;
+  write(KEYS.coupons, list);
+};
+
 // --- React hooks ---
 function useStore<T>(getter: () => T): T {
   return useSyncExternalStore(subscribe, getter, getter);
