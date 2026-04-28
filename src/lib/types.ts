@@ -56,3 +56,23 @@ export interface Order {
   trackingNumber?: string;
   carrier?: string;
 }
+
+export type FunnelEventType = "checkout_started" | "order_completed";
+export interface FunnelEvent {
+  type: FunnelEventType;
+  at: number;
+}
+
+export type StockChangeSource = "manual" | "order" | "cancellation" | "product_create" | "product_edit";
+export interface StockAuditEntry {
+  id: string;
+  productId: string;
+  productName: string;
+  before: number;
+  after: number;
+  delta: number;
+  source: StockChangeSource;
+  note?: string;
+  at: number;
+  actor?: string;
+}
