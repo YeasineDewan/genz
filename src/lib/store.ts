@@ -157,13 +157,27 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
   const all = read<Order[]>(KEYS.orders, []);
   all.unshift(order);
   write(KEYS.orders, all);
-  // Decrement stock
+  // Decrement stock + audit
   const products = getProducts();
   o.items.forEach((it) => {
     const p = products.find((x) => x.id === it.productId);
-    if (p) p.stock = Math.max(0, p.stock - it.qty);
+    if (!p) return;
+    const before = p.stock;
+    p.stock = Math.max(0, p.stock - it.qty);
+    appendStockAudit({
+      id: crypto.randomUUID(),
+      productId: p.id,
+      productName: p.name,
+      before,
+      after: p.stock,
+      delta: p.stock - before,
+      source: "order",
+      note: `Order #${order.id.slice(0, 8)}`,
+      at: now,
+    });
   });
   write(KEYS.products, products);
+  trackFunnel("order_completed");
   return order;
 };
 
@@ -171,11 +185,54 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
   const all = read<Order[]>(KEYS.orders, []);
   const o = all.find((x) => x.id === orderId);
   if (!o) return null;
+  const wasCancelled = o.status === "cancelled";
   o.status = status;
   o.tracking = [...(o.tracking ?? []), { status, at: Date.now(), note }];
   write(KEYS.orders, all);
+  // If transitioning into cancelled, restock items
+  if (status === "cancelled" && !wasCancelled) {
+    const products = getProducts();
+    o.items.forEach((it) => {
+      const p = products.find((x) => x.id === it.productId);
+      if (!p) return;
+      const before = p.stock;
+      p.stock = before + it.qty;
+      appendStockAudit({
+        id: crypto.randomUUID(),
+        productId: p.id,
+        productName: p.name,
+        before,
+        after: p.stock,
+        delta: it.qty,
+        source: "cancellation",
+        note: `Order #${o.id.slice(0, 8)} cancelled`,
+        at: Date.now(),
+      });
+    });
+    write(KEYS.products, products);
+  }
   return o;
 };
+
+export const updateOrderShipping = (
+  orderId: string,
+  shipping: Order["shipping"],
+  trackingNumber?: string,
+  carrier?: string,
+): Order | null => {
+  const all = read<Order[]>(KEYS.orders, []);
+  const o = all.find((x) => x.id === orderId);
+  if (!o) return null;
+  o.shipping = shipping;
+  if (trackingNumber !== undefined) o.trackingNumber = trackingNumber;
+  if (carrier !== undefined) o.carrier = carrier;
+  o.tracking = [...(o.tracking ?? []), { status: o.status, at: Date.now(), note: "Shipping/tracking updated" }];
+  write(KEYS.orders, all);
+  return o;
+};
+
+export const cancelOrder = (orderId: string, note?: string): Order | null =>
+  updateOrderStatus(orderId, "cancelled", note ?? "Order cancelled");
 
 export const getOrder = (id: string): Order | undefined =>
   read<Order[]>(KEYS.orders, []).find((o) => o.id === id);
