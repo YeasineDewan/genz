@@ -76,3 +76,27 @@ export interface StockAuditEntry {
   at: number;
   actor?: string;
 }
+
+export interface Review {
+  id: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  rating: number; // 1-5
+  title: string;
+  body: string;
+  at: number;
+}
+
+export type CouponType = "percent" | "fixed";
+export interface Coupon {
+  id: string;
+  code: string;        // uppercase
+  type: CouponType;
+  value: number;       // % or $ amount
+  minSubtotal?: number;
+  maxUses?: number;
+  uses: number;
+  active: boolean;
+  expiresAt?: number;
+}
