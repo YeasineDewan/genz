@@ -229,7 +229,20 @@ function Stat({ label, value, Icon, bg, fg, trend, warn }: {
   );
 }
 
-/* ───────────── Products ───────────── */
+function FunnelStage({ label, value, pct, bg, fg, caption }: {
+  label: string; value: number; pct: number; bg: string; fg?: string; caption?: string;
+}) {
+  return (
+    <div className={`sticker rounded-2xl p-5 ${bg} ${fg ?? ""}`}>
+      <div className="text-xs uppercase font-bold opacity-80">{label}</div>
+      <div className="font-display text-4xl mt-1">{value}</div>
+      <div className="mt-3 h-2 rounded-full bg-ink/15 overflow-hidden">
+        <div className="h-full bg-ink/70" style={{ width: `${Math.min(100, pct)}%` }}/>
+      </div>
+      {caption && <div className="text-xs font-bold mt-2">{caption}</div>}
+    </div>
+  );
+}
 
 function emptyProduct(): Product {
   return {
