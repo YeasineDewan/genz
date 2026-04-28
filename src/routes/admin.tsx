@@ -75,6 +75,7 @@ function Admin() {
 function Dashboard() {
   const orders = useOrders();
   const products = useProducts();
+  const funnel = useFunnelEvents();
 
   const stats = useMemo(() => {
     const revenue = orders.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
