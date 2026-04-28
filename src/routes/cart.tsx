@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice } from "@/lib/store";
+import { useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice, trackFunnel } from "@/lib/store";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { useEffect } from "react";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({ meta: [{ title: "Cart — GenZ" }] }),
@@ -13,6 +14,8 @@ function CartPage() {
   const products = useProducts();
   const total = cartTotal(cart, products);
   const ship = total >= 80 || total === 0 ? 0 : 8;
+
+  useEffect(() => { if (cart.length > 0) trackFunnel("cart_viewed"); }, []);
 
   return (
     <Layout>

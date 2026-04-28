@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice } from "@/lib/store";
+import { useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice, trackFunnel } from "@/lib/store";
+import { useEffect } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -23,6 +24,8 @@ function Checkout() {
     card: "", exp: "", cvc: "",
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => { if (cart.length > 0) trackFunnel("checkout_started"); }, []);
 
   if (cart.length === 0) {
     return (

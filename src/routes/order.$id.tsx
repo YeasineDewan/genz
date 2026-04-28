@@ -1,8 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useProducts, formatPrice, useOrder } from "@/lib/store";
+import { useProducts, formatPrice, useOrder, cancelOrder } from "@/lib/store";
 import type { OrderStatus } from "@/lib/types";
-import { CheckCircle2, Package, Truck, Home, Clock, MapPin, Copy } from "lucide-react";
+import { CheckCircle2, Package, Truck, Home, Clock, MapPin, Copy, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/order/$id")({
@@ -44,6 +44,14 @@ function OrderPage() {
     if (!order.trackingNumber) return;
     navigator.clipboard.writeText(order.trackingNumber);
     toast.success("Tracking number copied");
+  };
+
+  const canCancel = order.status === "pending" || order.status === "processing";
+  const handleCancel = () => {
+    if (!canCancel) return;
+    if (!confirm("Cancel this order? Items will be restocked.")) return;
+    cancelOrder(order.id, "Cancelled by customer");
+    toast.success("Order cancelled");
   };
 
   return (
@@ -166,6 +174,11 @@ function OrderPage() {
         <div className="flex gap-3 justify-center flex-wrap">
           <Link to="/shop" className="btn-pop">Keep shopping</Link>
           <Link to="/account" className="btn-pop ghost">My orders</Link>
+          {canCancel && (
+            <button onClick={handleCancel} className="btn-pop bg-destructive text-white">
+              <XCircle size={16}/> Cancel order
+            </button>
+          )}
         </div>
       </section>
     </Layout>

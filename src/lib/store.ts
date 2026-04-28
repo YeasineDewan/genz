@@ -2,7 +2,10 @@
 // the read/write helpers with fetch() calls — public API is stable.
 import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
-import type { Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent } from "./types";
+import type {
+  Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
+  FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
+} from "./types";
 
 const KEYS = {
   products: "genz.products",
@@ -11,6 +14,8 @@ const KEYS = {
   users: "genz.users",
   orders: "genz.orders",
   categories: "genz.categories",
+  funnel: "genz.funnel",
+  stockAudit: "genz.stockAudit",
 } as const;
 
 export const defaultCategories: CategoryDef[] = [
@@ -65,11 +70,32 @@ export const deleteCategory = (id: string) => write(KEYS.categories, getCategori
 // --- Products ---
 export const getProducts = (): Product[] => read(KEYS.products, seedProducts);
 export const getProduct = (slug: string) => getProducts().find((p) => p.slug === slug);
-export const saveProduct = (p: Product) => {
+export const saveProduct = (
+  p: Product,
+  opts?: { stockSource?: StockChangeSource; stockNote?: string; actor?: string },
+) => {
   const list = getProducts();
   const i = list.findIndex((x) => x.id === p.id);
+  const prev = i >= 0 ? list[i] : null;
   if (i >= 0) list[i] = p; else list.push(p);
   write(KEYS.products, list);
+  // Audit stock changes
+  const before = prev ? prev.stock : 0;
+  const after = p.stock;
+  if (before !== after) {
+    appendStockAudit({
+      id: crypto.randomUUID(),
+      productId: p.id,
+      productName: p.name,
+      before,
+      after,
+      delta: after - before,
+      source: opts?.stockSource ?? (prev ? "manual" : "product_create"),
+      note: opts?.stockNote,
+      actor: opts?.actor,
+      at: Date.now(),
+    });
+  }
 };
 export const deleteProduct = (id: string) => write(KEYS.products, getProducts().filter((p) => p.id !== id));
 
@@ -131,13 +157,27 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
   const all = read<Order[]>(KEYS.orders, []);
   all.unshift(order);
   write(KEYS.orders, all);
-  // Decrement stock
+  // Decrement stock + audit
   const products = getProducts();
   o.items.forEach((it) => {
     const p = products.find((x) => x.id === it.productId);
-    if (p) p.stock = Math.max(0, p.stock - it.qty);
+    if (!p) return;
+    const before = p.stock;
+    p.stock = Math.max(0, p.stock - it.qty);
+    appendStockAudit({
+      id: crypto.randomUUID(),
+      productId: p.id,
+      productName: p.name,
+      before,
+      after: p.stock,
+      delta: p.stock - before,
+      source: "order",
+      note: `Order #${order.id.slice(0, 8)}`,
+      at: now,
+    });
   });
   write(KEYS.products, products);
+  trackFunnel("order_completed");
   return order;
 };
 
@@ -145,14 +185,76 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
   const all = read<Order[]>(KEYS.orders, []);
   const o = all.find((x) => x.id === orderId);
   if (!o) return null;
+  const wasCancelled = o.status === "cancelled";
   o.status = status;
   o.tracking = [...(o.tracking ?? []), { status, at: Date.now(), note }];
+  write(KEYS.orders, all);
+  // If transitioning into cancelled, restock items
+  if (status === "cancelled" && !wasCancelled) {
+    const products = getProducts();
+    o.items.forEach((it) => {
+      const p = products.find((x) => x.id === it.productId);
+      if (!p) return;
+      const before = p.stock;
+      p.stock = before + it.qty;
+      appendStockAudit({
+        id: crypto.randomUUID(),
+        productId: p.id,
+        productName: p.name,
+        before,
+        after: p.stock,
+        delta: it.qty,
+        source: "cancellation",
+        note: `Order #${o.id.slice(0, 8)} cancelled`,
+        at: Date.now(),
+      });
+    });
+    write(KEYS.products, products);
+  }
+  return o;
+};
+
+export const updateOrderShipping = (
+  orderId: string,
+  shipping: Order["shipping"],
+  trackingNumber?: string,
+  carrier?: string,
+): Order | null => {
+  const all = read<Order[]>(KEYS.orders, []);
+  const o = all.find((x) => x.id === orderId);
+  if (!o) return null;
+  o.shipping = shipping;
+  if (trackingNumber !== undefined) o.trackingNumber = trackingNumber;
+  if (carrier !== undefined) o.carrier = carrier;
+  o.tracking = [...(o.tracking ?? []), { status: o.status, at: Date.now(), note: "Shipping/tracking updated" }];
   write(KEYS.orders, all);
   return o;
 };
 
+export const cancelOrder = (orderId: string, note?: string): Order | null =>
+  updateOrderStatus(orderId, "cancelled", note ?? "Order cancelled");
+
 export const getOrder = (id: string): Order | undefined =>
   read<Order[]>(KEYS.orders, []).find((o) => o.id === id);
+
+// --- Funnel analytics ---
+export const getFunnelEvents = (): FunnelEvent[] => read(KEYS.funnel, []);
+export const trackFunnel = (type: FunnelEventType) => {
+  const list = getFunnelEvents();
+  list.push({ type, at: Date.now() });
+  // cap at 5000 to avoid bloat
+  if (list.length > 5000) list.splice(0, list.length - 5000);
+  write(KEYS.funnel, list);
+};
+
+// --- Stock audit ---
+export const getStockAudit = (): StockAuditEntry[] => read(KEYS.stockAudit, []);
+export const appendStockAudit = (entry: StockAuditEntry) => {
+  const list = getStockAudit();
+  list.unshift(entry);
+  if (list.length > 2000) list.length = 2000;
+  write(KEYS.stockAudit, list);
+};
 
 // --- React hooks ---
 function useStore<T>(getter: () => T): T {
@@ -164,6 +266,8 @@ export const useUser = () => useStore(getCurrentUser);
 export const useOrders = (userId?: string) => useStore(() => getOrders(userId));
 export const useCategories = () => useStore(getCategories);
 export const useOrder = (id: string) => useStore(() => getOrder(id));
+export const useFunnelEvents = () => useStore(getFunnelEvents);
+export const useStockAudit = () => useStore(getStockAudit);
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
