@@ -266,6 +266,8 @@ export const useUser = () => useStore(getCurrentUser);
 export const useOrders = (userId?: string) => useStore(() => getOrders(userId));
 export const useCategories = () => useStore(getCategories);
 export const useOrder = (id: string) => useStore(() => getOrder(id));
+export const useFunnelEvents = () => useStore(getFunnelEvents);
+export const useStockAudit = () => useStore(getStockAudit);
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
