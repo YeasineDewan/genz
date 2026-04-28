@@ -57,7 +57,7 @@ export interface Order {
   carrier?: string;
 }
 
-export type FunnelEventType = "checkout_started" | "order_completed";
+export type FunnelEventType = "cart_viewed" | "checkout_started" | "order_completed";
 export interface FunnelEvent {
   type: FunnelEventType;
   at: number;
