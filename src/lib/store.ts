@@ -237,6 +237,25 @@ export const cancelOrder = (orderId: string, note?: string): Order | null =>
 export const getOrder = (id: string): Order | undefined =>
   read<Order[]>(KEYS.orders, []).find((o) => o.id === id);
 
+// --- Funnel analytics ---
+export const getFunnelEvents = (): FunnelEvent[] => read(KEYS.funnel, []);
+export const trackFunnel = (type: FunnelEventType) => {
+  const list = getFunnelEvents();
+  list.push({ type, at: Date.now() });
+  // cap at 5000 to avoid bloat
+  if (list.length > 5000) list.splice(0, list.length - 5000);
+  write(KEYS.funnel, list);
+};
+
+// --- Stock audit ---
+export const getStockAudit = (): StockAuditEntry[] => read(KEYS.stockAudit, []);
+export const appendStockAudit = (entry: StockAuditEntry) => {
+  const list = getStockAudit();
+  list.unshift(entry);
+  if (list.length > 2000) list.length = 2000;
+  write(KEYS.stockAudit, list);
+};
+
 // --- React hooks ---
 function useStore<T>(getter: () => T): T {
   return useSyncExternalStore(subscribe, getter, getter);
