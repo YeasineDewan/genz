@@ -561,43 +561,105 @@ function Orders() {
         <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No orders.</div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((o) => (
-            <div key={o.id} className="sticker rounded-2xl bg-white p-5">
-              <div className="flex items-start justify-between flex-wrap gap-3">
-                <div>
-                  <div className="font-mono text-xs text-muted-foreground">#{o.id.slice(0, 8)}</div>
-                  <div className="font-bold text-lg">{o.shipping.name}</div>
-                  <div className="text-sm text-muted-foreground">{o.shipping.address}, {o.shipping.city} {o.shipping.zip}</div>
-                  <div className="text-xs mt-1">{new Date(o.createdAt).toLocaleString()}{o.trackingNumber ? ` · ${o.trackingNumber}` : ""}</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-display text-2xl">{formatPrice(o.total)}</div>
-                  <select
-                    value={o.status}
-                    onChange={(e) => { updateOrderStatus(o.id, e.target.value as OrderStatus, "Updated by admin"); toast.success("Status updated"); }}
-                    className="mt-2 rounded-full border-[3px] border-ink bg-pop-yellow font-bold text-sm px-3 py-1"
-                  >
-                    {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {o.items.map((it, i) => {
-                  const p = products.find((x) => x.id === it.productId);
-                  if (!p) return null;
-                  return (
-                    <div key={i} className="flex items-center gap-2 chip bg-pop-cyan/40">
-                      <img src={p.image} className="h-6 w-6 rounded-full border border-ink object-cover" alt=""/>
-                      <span className="font-bold">{p.name}</span>
-                      <span className="text-xs">{it.size} × {it.qty}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+          {filtered.map((o) => <OrderRow key={o.id} o={o}/>)}
         </div>
       )}
+    </div>
+  );
+}
+
+function OrderRow({ o }: { o: Order }) {
+  const products = useProducts();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    name: o.shipping.name,
+    address: o.shipping.address,
+    city: o.shipping.city,
+    zip: o.shipping.zip,
+    country: o.shipping.country,
+    trackingNumber: o.trackingNumber ?? "",
+    carrier: o.carrier ?? "",
+  });
+
+  const reset = () => setDraft({
+    name: o.shipping.name, address: o.shipping.address, city: o.shipping.city,
+    zip: o.shipping.zip, country: o.shipping.country,
+    trackingNumber: o.trackingNumber ?? "", carrier: o.carrier ?? "",
+  });
+
+  const save = () => {
+    if (!draft.name.trim() || !draft.address.trim() || !draft.city.trim() || !draft.zip.trim() || !draft.country.trim()) {
+      toast.error("All shipping fields are required");
+      return;
+    }
+    updateOrderShipping(
+      o.id,
+      { name: draft.name.trim(), address: draft.address.trim(), city: draft.city.trim(), zip: draft.zip.trim(), country: draft.country.trim() },
+      draft.trackingNumber.trim(),
+      draft.carrier.trim() || undefined,
+    );
+    toast.success("Order updated");
+    setEditing(false);
+  };
+
+  return (
+    <div className="sticker rounded-2xl bg-white p-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div className="min-w-0">
+          <div className="font-mono text-xs text-muted-foreground">#{o.id.slice(0, 8)}</div>
+          {!editing ? (
+            <>
+              <div className="font-bold text-lg">{o.shipping.name}</div>
+              <div className="text-sm text-muted-foreground">{o.shipping.address}, {o.shipping.city} {o.shipping.zip} · {o.shipping.country}</div>
+              <div className="text-xs mt-1">
+                {new Date(o.createdAt).toLocaleString()}
+                {o.trackingNumber ? ` · ${o.carrier ?? ""} ${o.trackingNumber}` : ""}
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 max-w-xl">
+              <input value={draft.name} onChange={(e)=>setDraft({...draft,name:e.target.value})} placeholder="Name" className="inp-sm sm:col-span-2"/>
+              <input value={draft.address} onChange={(e)=>setDraft({...draft,address:e.target.value})} placeholder="Address" className="inp-sm sm:col-span-2"/>
+              <input value={draft.city} onChange={(e)=>setDraft({...draft,city:e.target.value})} placeholder="City" className="inp-sm"/>
+              <input value={draft.zip} onChange={(e)=>setDraft({...draft,zip:e.target.value})} placeholder="ZIP" className="inp-sm"/>
+              <input value={draft.country} onChange={(e)=>setDraft({...draft,country:e.target.value})} placeholder="Country" className="inp-sm sm:col-span-2"/>
+              <input value={draft.carrier} onChange={(e)=>setDraft({...draft,carrier:e.target.value})} placeholder="Carrier" className="inp-sm"/>
+              <input value={draft.trackingNumber} onChange={(e)=>setDraft({...draft,trackingNumber:e.target.value})} placeholder="Tracking #" className="inp-sm font-mono"/>
+              <div className="sm:col-span-2 flex gap-2">
+                <button onClick={save} className="chip bg-pop-pink text-white"><Save size={12}/> Save</button>
+                <button onClick={() => { reset(); setEditing(false); }} className="chip">Cancel</button>
+              </div>
+              <style>{`.inp-sm{border:2px solid var(--ink);border-radius:10px;padding:.4rem .6rem;background:white;outline:none;font-size:.875rem}`}</style>
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <div className="font-display text-2xl">{formatPrice(o.total)}</div>
+          <select
+            value={o.status}
+            onChange={(e) => { updateOrderStatus(o.id, e.target.value as OrderStatus, "Updated by admin"); toast.success("Status updated"); }}
+            className="mt-2 rounded-full border-[3px] border-ink bg-pop-yellow font-bold text-sm px-3 py-1"
+          >
+            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
+          </select>
+          {!editing && (
+            <button onClick={() => setEditing(true)} className="chip mt-2 ml-2"><Edit3 size={12}/> Edit shipping</button>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {o.items.map((it, i) => {
+          const p = products.find((x) => x.id === it.productId);
+          if (!p) return null;
+          return (
+            <div key={i} className="flex items-center gap-2 chip bg-pop-cyan/40">
+              <img src={p.image} className="h-6 w-6 rounded-full border border-ink object-cover" alt=""/>
+              <span className="font-bold">{p.name}</span>
+              <span className="text-xs">{it.size} × {it.qty}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
