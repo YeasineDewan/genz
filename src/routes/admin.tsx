@@ -692,11 +692,12 @@ function Inventory() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <div className="text-xs font-bold uppercase mb-1">{label}</div>
       {children}
+      {error && <div className="text-xs font-bold text-destructive mt-1">{error}</div>}
     </label>
   );
 }
