@@ -2,7 +2,10 @@
 // the read/write helpers with fetch() calls — public API is stable.
 import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
-import type { Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent } from "./types";
+import type {
+  Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
+  FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
+} from "./types";
 
 const KEYS = {
   products: "genz.products",
@@ -11,6 +14,8 @@ const KEYS = {
   users: "genz.users",
   orders: "genz.orders",
   categories: "genz.categories",
+  funnel: "genz.funnel",
+  stockAudit: "genz.stockAudit",
 } as const;
 
 export const defaultCategories: CategoryDef[] = [
