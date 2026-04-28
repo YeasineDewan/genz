@@ -5,6 +5,7 @@ import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
+  Review, Coupon,
 } from "./types";
 
 const KEYS = {
@@ -16,6 +17,10 @@ const KEYS = {
   categories: "genz.categories",
   funnel: "genz.funnel",
   stockAudit: "genz.stockAudit",
+  reviews: "genz.reviews",
+  wishlist: "genz.wishlist",
+  recent: "genz.recent",
+  coupons: "genz.coupons",
 } as const;
 
 export const defaultCategories: CategoryDef[] = [
