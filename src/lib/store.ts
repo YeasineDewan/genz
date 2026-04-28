@@ -70,11 +70,32 @@ export const deleteCategory = (id: string) => write(KEYS.categories, getCategori
 // --- Products ---
 export const getProducts = (): Product[] => read(KEYS.products, seedProducts);
 export const getProduct = (slug: string) => getProducts().find((p) => p.slug === slug);
-export const saveProduct = (p: Product) => {
+export const saveProduct = (
+  p: Product,
+  opts?: { stockSource?: StockChangeSource; stockNote?: string; actor?: string },
+) => {
   const list = getProducts();
   const i = list.findIndex((x) => x.id === p.id);
+  const prev = i >= 0 ? list[i] : null;
   if (i >= 0) list[i] = p; else list.push(p);
   write(KEYS.products, list);
+  // Audit stock changes
+  const before = prev ? prev.stock : 0;
+  const after = p.stock;
+  if (before !== after) {
+    appendStockAudit({
+      id: crypto.randomUUID(),
+      productId: p.id,
+      productName: p.name,
+      before,
+      after,
+      delta: after - before,
+      source: opts?.stockSource ?? (prev ? "manual" : "product_create"),
+      note: opts?.stockNote,
+      actor: opts?.actor,
+      at: Date.now(),
+    });
+  }
 };
 export const deleteProduct = (id: string) => write(KEYS.products, getProducts().filter((p) => p.id !== id));
 
