@@ -668,14 +668,19 @@ function OrderRow({ o }: { o: Order }) {
 
 function Inventory() {
   const products = useProducts();
+  const audit = useStockAudit();
   const [edits, setEdits] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [auditFilter, setAuditFilter] = useState("");
 
   const setQty = (id: string, qty: number) => setEdits((e) => ({ ...e, [id]: qty }));
   const commit = (p: Product) => {
     const next = edits[p.id];
     if (next === undefined || next === p.stock) return;
-    saveProduct({ ...p, stock: Math.max(0, next) });
+    const note = notes[p.id]?.trim() || `Manual adjustment (${next - p.stock >= 0 ? "+" : ""}${next - p.stock})`;
+    saveProduct({ ...p, stock: Math.max(0, next) }, { stockSource: "manual", stockNote: note });
     setEdits((e) => { const c = { ...e }; delete c[p.id]; return c; });
+    setNotes((n) => { const c = { ...n }; delete c[p.id]; return c; });
     toast.success(`${p.name} → ${next} in stock`);
   };
 
@@ -692,6 +697,11 @@ function Inventory() {
     return { units, value, low, out };
   }, [products]);
 
+  const filteredAudit = useMemo(() => {
+    const q = auditFilter.trim().toLowerCase();
+    return q ? audit.filter((a) => a.productName.toLowerCase().includes(q) || a.source.includes(q) || (a.note ?? "").toLowerCase().includes(q)) : audit;
+  }, [audit, auditFilter]);
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -702,13 +712,14 @@ function Inventory() {
       </div>
 
       <div className="sticker rounded-2xl bg-white overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-pop-yellow border-b-[3px] border-ink">
             <tr>
               <th className="text-left p-3">Product</th>
               <th className="text-left p-3">SKU</th>
               <th className="text-left p-3">Current</th>
               <th className="text-left p-3">Adjust</th>
+              <th className="text-left p-3">Note</th>
               <th className="p-3"></th>
             </tr>
           </thead>
@@ -738,6 +749,10 @@ function Inventory() {
                       <button onClick={() => adjust(p, 1)} className="h-8 w-8 rounded-full border-2 border-ink bg-white font-bold">+</button>
                     </div>
                   </td>
+                  <td className="p-3">
+                    <input value={notes[p.id] ?? ""} onChange={(e) => setNotes((n) => ({ ...n, [p.id]: e.target.value }))}
+                      placeholder="Reason (optional)" className="w-40 border-2 border-ink rounded-lg px-2 py-1 bg-white text-xs"/>
+                  </td>
                   <td className="p-3 text-right">
                     <button onClick={() => commit(p)} disabled={!dirty}
                       className="chip bg-pop-pink text-white disabled:opacity-40 disabled:bg-muted disabled:text-muted-foreground">
@@ -749,6 +764,52 @@ function Inventory() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Audit history */}
+      <div className="sticker rounded-2xl bg-white p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="text-2xl flex items-center gap-2"><History size={20}/> Inventory audit log</h3>
+          <input value={auditFilter} onChange={(e) => setAuditFilter(e.target.value)} placeholder="Search product, source, note..."
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none"/>
+        </div>
+        {filteredAudit.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{audit.length === 0 ? "No stock changes recorded yet." : "No matching entries."}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead className="text-xs uppercase text-muted-foreground border-b-2 border-ink/20">
+                <tr>
+                  <th className="text-left p-2">When</th>
+                  <th className="text-left p-2">Product</th>
+                  <th className="text-left p-2">Source</th>
+                  <th className="text-right p-2">Before</th>
+                  <th className="text-right p-2">Δ</th>
+                  <th className="text-right p-2">After</th>
+                  <th className="text-left p-2">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAudit.slice(0, 200).map((e: StockAuditEntry) => (
+                  <tr key={e.id} className="border-b border-ink/10">
+                    <td className="p-2 whitespace-nowrap text-xs">{new Date(e.at).toLocaleString()}</td>
+                    <td className="p-2 font-bold">{e.productName}</td>
+                    <td className="p-2"><span className="chip bg-pop-yellow text-xs">{e.source.replace(/_/g, " ")}</span></td>
+                    <td className="p-2 text-right font-mono">{e.before}</td>
+                    <td className={`p-2 text-right font-bold ${e.delta > 0 ? "text-pop-cyan" : e.delta < 0 ? "text-destructive" : ""}`}>
+                      {e.delta > 0 ? `+${e.delta}` : e.delta}
+                    </td>
+                    <td className="p-2 text-right font-mono">{e.after}</td>
+                    <td className="p-2 text-xs text-muted-foreground">{e.note ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredAudit.length > 200 && (
+              <div className="text-xs text-muted-foreground mt-2 text-center">Showing latest 200 of {filteredAudit.length} entries.</div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
