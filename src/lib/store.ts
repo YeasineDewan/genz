@@ -1,6 +1,6 @@
 // Tiny localStorage-backed store. Swap to a Laravel REST client later by replacing
 // the read/write helpers with fetch() calls — public API is stable.
-import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
+import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
@@ -30,18 +30,38 @@ const listeners = new Set<Listener>();
 const emit = () => listeners.forEach((l) => l());
 const subscribe = (l: Listener) => { listeners.add(l); return () => listeners.delete(l); };
 
+// Snapshot cache: keep stable references per key so useSyncExternalStore
+// doesn't see a new array/object every render (which would cause an
+// infinite "Maximum update depth" loop). We re-parse only when the
+// underlying raw JSON string actually changes.
+const snapshotCache = new Map<string, { raw: string | null; value: unknown }>();
+const SERVER_SNAPSHOT = Symbol("server-snapshot");
+const serverSnapshots = new Map<string, unknown>();
+
 function read<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
+  if (typeof window === "undefined") {
+    // Stable per-key fallback for SSR/server snapshot
+    if (!serverSnapshots.has(key)) serverSnapshots.set(key, fallback);
+    return serverSnapshots.get(key) as T;
+  }
   try {
     const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    const cached = snapshotCache.get(key);
+    if (cached && cached.raw === raw) return cached.value as T;
+    const value = raw ? (JSON.parse(raw) as T) : fallback;
+    snapshotCache.set(key, { raw, value });
+    return value;
   } catch { return fallback; }
 }
 function write<T>(key: string, val: T) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(val));
+  const raw = JSON.stringify(val);
+  localStorage.setItem(key, raw);
+  // Pre-populate cache so the next read returns the same reference
+  snapshotCache.set(key, { raw, value: val });
   emit();
 }
+void SERVER_SNAPSHOT;
 
 const SEED_VERSION = "2";
 export function ensureSeeded() {
@@ -263,11 +283,19 @@ function useStore<T>(getter: () => T): T {
 export const useProducts = () => useStore(getProducts);
 export const useCart = () => useStore(getCart);
 export const useUser = () => useStore(getCurrentUser);
-export const useOrders = (userId?: string) => useStore(() => getOrders(userId));
 export const useCategories = () => useStore(getCategories);
-export const useOrder = (id: string) => useStore(() => getOrder(id));
 export const useFunnelEvents = () => useStore(getFunnelEvents);
 export const useStockAudit = () => useStore(getStockAudit);
+// Derived hooks: subscribe to the full underlying list, then derive with useMemo
+// to keep the returned reference stable across renders.
+export const useOrders = (userId?: string) => {
+  const all = useStore(() => read<Order[]>(KEYS.orders, []));
+  return useMemo(() => (userId ? all.filter((o) => o.userId === userId) : all), [all, userId]);
+};
+export const useOrder = (id: string) => {
+  const all = useStore(() => read<Order[]>(KEYS.orders, []));
+  return useMemo(() => all.find((o) => o.id === id), [all, id]);
+};
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
