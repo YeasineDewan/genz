@@ -401,37 +401,39 @@ function ProductDrawer({ product, onClose }: { product: Product; onClose: () => 
           <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white"><X size={16}/></button>
         </div>
         <div className="p-4 space-y-3">
-          <Field label="Name"><input required value={p.name} onChange={(e)=>setP({...p,name:e.target.value})} className="inp"/></Field>
+          <Field label="Name" error={errors.name}><input value={p.name} onChange={(e)=>setP({...p,name:e.target.value})} className="inp" maxLength={80}/></Field>
           <Field label="Slug (url)"><input value={p.slug} onChange={(e)=>setP({...p,slug:e.target.value})} placeholder="auto-generated" className="inp"/></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Price"><input required type="number" step="0.01" value={p.price} onChange={(e)=>setP({...p,price:+e.target.value})} className="inp"/></Field>
-            <Field label="Stock"><input required type="number" value={p.stock} onChange={(e)=>setP({...p,stock:+e.target.value})} className="inp"/></Field>
+            <Field label="Price" error={errors.price}><input type="number" step="0.01" min="0" value={p.price} onChange={(e)=>setP({...p,price:+e.target.value})} className="inp"/></Field>
+            <Field label="Stock" error={errors.stock}><input type="number" min="0" value={p.stock} onChange={(e)=>setP({...p,stock:+e.target.value})} className="inp"/></Field>
           </div>
-          <Field label="Category">
+          <Field label="Category" error={errors.category}>
             <select value={p.category} onChange={(e)=>setP({...p,category:e.target.value})} className="inp">
+              <option value="">— select —</option>
               {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="Colors (comma-separated)">
+          <Field label="Colors (comma-separated)" error={errors.colors}>
             <input value={p.colors.join(",")} onChange={(e)=>setP({...p,colors:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)})} className="inp"/>
           </Field>
-          <Field label="Sizes (comma-separated)">
+          <Field label="Sizes (comma-separated)" error={errors.sizes}>
             <input value={p.sizes.join(",")} onChange={(e)=>setP({...p,sizes:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)})} className="inp"/>
           </Field>
           <Field label="Badge (optional)">
             <input value={p.badge ?? ""} onChange={(e)=>setP({...p,badge:e.target.value || undefined})} className="inp"/>
           </Field>
-          <Field label="Description">
-            <textarea value={p.description} onChange={(e)=>setP({...p,description:e.target.value})} className="inp min-h-24"/>
+          <Field label="Description" error={errors.description}>
+            <textarea value={p.description} onChange={(e)=>setP({...p,description:e.target.value})} className="inp min-h-24" maxLength={1000}/>
+            <div className="text-[10px] text-muted-foreground mt-1 text-right">{p.description.length}/1000</div>
           </Field>
 
-          <Field label="Images (first = cover, drag-reorder w/ arrows)">
+          <Field label={`Images (${(p.images ?? []).length}/${MAX_IMAGES} — first = cover)`} error={errors.images}>
             <label className="block border-[3px] border-dashed border-ink rounded-xl p-4 text-center bg-white cursor-pointer hover:bg-pop-yellow/30">
-              <input type="file" multiple accept="image/*" className="hidden"
+              <input type="file" multiple accept={ACCEPTED_TYPES.join(",")} className="hidden"
                 onChange={(e) => e.target.files && onFiles(e.target.files)}/>
               <ImagePlus className="mx-auto mb-1"/>
               <div className="text-sm font-bold">Upload images</div>
-              <div className="text-xs text-muted-foreground">PNG, JPG, WEBP — multiple allowed</div>
+              <div className="text-xs text-muted-foreground">PNG, JPG, WEBP, GIF — max 2MB each, up to {MAX_IMAGES} total</div>
             </label>
             {(p.images ?? []).length > 0 && (
               <div className="grid grid-cols-3 gap-2 mt-3">
