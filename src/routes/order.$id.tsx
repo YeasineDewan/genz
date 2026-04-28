@@ -174,6 +174,11 @@ function OrderPage() {
         <div className="flex gap-3 justify-center flex-wrap">
           <Link to="/shop" className="btn-pop">Keep shopping</Link>
           <Link to="/account" className="btn-pop ghost">My orders</Link>
+          {canCancel && (
+            <button onClick={handleCancel} className="btn-pop bg-destructive text-white">
+              <XCircle size={16}/> Cancel order
+            </button>
+          )}
         </div>
       </section>
     </Layout>
