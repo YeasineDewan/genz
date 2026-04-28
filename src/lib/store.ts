@@ -1,6 +1,6 @@
 // Tiny localStorage-backed store. Swap to a Laravel REST client later by replacing
 // the read/write helpers with fetch() calls — public API is stable.
-import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
+import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
