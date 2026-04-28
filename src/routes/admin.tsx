@@ -149,6 +149,24 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* Conversion funnel — last 7 days */}
+      <div className="sticker rounded-2xl bg-white p-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h3 className="text-2xl">Conversion — last 7 days</h3>
+          <span className="chip bg-pop-cyan">Overall {stats.overall.toFixed(1)}%</span>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <FunnelStage label="Cart views" value={stats.cartViews} pct={100} bg="bg-pop-yellow"/>
+          <FunnelStage label="Checkouts started" value={stats.checkouts} pct={stats.cartToCheckout} bg="bg-pop-orange"
+            caption={`${stats.cartToCheckout.toFixed(1)}% cart → checkout`}/>
+          <FunnelStage label="Orders completed" value={stats.completions} pct={stats.checkoutToOrder} bg="bg-pop-pink" fg="text-white"
+            caption={`${stats.checkoutToOrder.toFixed(1)}% checkout → order`}/>
+        </div>
+        {stats.cartViews === 0 && (
+          <p className="text-xs text-muted-foreground mt-4">No funnel activity yet — visit the cart and checkout to start tracking.</p>
+        )}
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="sticker rounded-2xl bg-white p-6">
           <h3 className="text-2xl mb-4">Best sellers</h3>
