@@ -1,15 +1,30 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Search, ShoppingBag, User as UserIcon, LogOut, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { Search, ShoppingBag, User as UserIcon, LogOut, ShieldCheck, Heart, Command } from "lucide-react";
+import { useEffect, useState } from "react";
 import logo from "@/assets/logo.jpg";
-import { useCart, useUser, signOut, cartCount } from "@/lib/store";
+import { useCart, useUser, signOut, cartCount, useWishlist } from "@/lib/store";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export function Header({ onCartClick }: { onCartClick: () => void }) {
   const cart = useCart();
   const user = useUser();
+  const wish = useWishlist();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Cmd+K / Ctrl+K → open palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 border-b-[3px] border-ink bg-paper/95 backdrop-blur">
@@ -53,15 +68,30 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
           ))}
         </nav>
 
-        <form
-          className="ml-auto flex-1 max-w-md hidden sm:flex items-center gap-2 rounded-full border-[3px] border-ink bg-white px-3 py-2 shadow-sticker-sm"
-          onSubmit={(e) => { e.preventDefault(); navigate({ to: "/shop", search: { q } as any }); }}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="ml-auto flex-1 max-w-md hidden sm:flex items-center gap-2 rounded-full border-[3px] border-ink bg-white px-3 py-2 shadow-sticker-sm text-left"
         >
           <Search size={18} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the chaos..." className="w-full bg-transparent outline-none text-sm" />
+          <span className="flex-1 text-sm text-muted-foreground">Search the chaos...</span>
+          <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-bold uppercase border border-ink/30 rounded px-1.5 py-0.5 text-muted-foreground">
+            <Command size={10}/> K
+          </span>
+        </button>
+
+        {/* Mobile mini search submit (kept for accessibility) */}
+        <form className="sr-only" onSubmit={(e) => { e.preventDefault(); navigate({ to: "/shop", search: { q } as any }); }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search"/>
         </form>
 
         <div className="flex items-center gap-2">
+          <Link to="/wishlist" className="relative h-11 w-11 rounded-full border-[3px] border-ink bg-white grid place-items-center shadow-sticker-sm hover:translate-y-[-2px] transition" aria-label="Wishlist">
+            <Heart size={18} className={wish.length > 0 ? "fill-pop-pink text-pop-pink" : ""}/>
+            {wish.length > 0 && (
+              <span className="absolute -top-1 -right-1 grid place-items-center min-w-5 h-5 px-1 rounded-full bg-ink text-paper text-[10px] font-bold">{wish.length}</span>
+            )}
+          </Link>
+
           <div className="relative">
             <button
               onClick={() => setMenu((v) => !v)}
@@ -71,7 +101,7 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
               <UserIcon size={18} />
             </button>
             {menu && (
-              <div onMouseLeave={() => setMenu(false)} className="absolute right-0 mt-2 w-56 sticker rounded-xl p-2 z-50">
+              <div onMouseLeave={() => setMenu(false)} className="absolute right-0 mt-2 w-56 sticker rounded-xl p-2 z-50 bg-white">
                 {user ? (
                   <>
                     <div className="px-3 py-2 text-sm">
@@ -79,6 +109,7 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
                       <div className="text-muted-foreground truncate">{user.email}</div>
                     </div>
                     <Link to="/account" className="block px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm">My orders</Link>
+                    <Link to="/wishlist" className="block px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm">Wishlist</Link>
                     {user.isAdmin && (
                       <Link to="/admin" className="px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm flex items-center gap-2">
                         <ShieldCheck size={14} /> Admin
@@ -110,6 +141,8 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
           </button>
         </div>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)}/>
     </header>
   );
 }

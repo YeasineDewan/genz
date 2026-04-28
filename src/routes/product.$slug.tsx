@@ -1,8 +1,12 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductGallery } from "@/components/ProductGallery";
-import { useProducts, addToCart, formatPrice } from "@/lib/store";
-import { useState } from "react";
+import { Reviews } from "@/components/Reviews";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { WishlistButton } from "@/components/WishlistButton";
+import { Stars } from "@/components/Stars";
+import { useProducts, addToCart, formatPrice, trackRecent, useProductRating } from "@/lib/store";
+import { useEffect, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -35,6 +39,9 @@ function ProductPage() {
   const [size, setSize] = useState(product.sizes[0]);
   const [color, setColor] = useState(product.colors[0]);
   const [qty, setQty] = useState(1);
+  const rating = useProductRating(product.id);
+
+  useEffect(() => { trackRecent(product.id); }, [product.id]);
 
   const colorMap: Record<string, string> = {
     pink: "bg-pop-pink", cyan: "bg-pop-cyan", yellow: "bg-pop-yellow", orange: "bg-pop-orange",
@@ -59,6 +66,7 @@ function ProductPage() {
             <span className="chip">{product.category}</span>
           </div>
           <h1 className="text-5xl">{product.name}</h1>
+          <div className="mt-2"><Stars value={rating.avg} size={16} count={rating.count}/></div>
           <div className="mt-3 font-display text-3xl">{formatPrice(product.price)}</div>
           <p className="mt-5 text-muted-foreground">{product.description}</p>
 
@@ -92,7 +100,10 @@ function ProductPage() {
               <span className="px-3 font-bold">{qty}</span>
               <button onClick={() => setQty((q) => q + 1)} className="px-4 py-2 font-bold">+</button>
             </div>
-            <button onClick={handleAdd} className="btn-pop flex-1 justify-center"><ShoppingBag size={18}/> Add to bag</button>
+            <button onClick={handleAdd} className="btn-pop flex-1 justify-center" disabled={product.stock === 0}>
+              <ShoppingBag size={18}/> {product.stock === 0 ? "Sold out" : "Add to bag"}
+            </button>
+            <WishlistButton productId={product.id}/>
           </div>
 
           <div className="mt-8 grid grid-cols-3 gap-2 text-xs">
@@ -103,11 +114,13 @@ function ProductPage() {
         </motion.div>
       </section>
 
+      <Reviews productId={product.id}/>
+
       {related.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 py-16">
           <h2 className="text-3xl mb-6">You'll also love</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {related.map((p, i) => (
+            {related.map((p) => (
               <Link key={p.id} to="/product/$slug" params={{ slug: p.slug }} className="sticker rounded-2xl overflow-hidden bg-white hover:translate-y-[-3px] transition">
                 <img src={p.image} alt={p.name} className="aspect-square object-cover w-full" loading="lazy"/>
                 <div className="p-3 border-t-[3px] border-ink flex justify-between"><span className="font-bold truncate">{p.name}</span><span>{formatPrice(p.price)}</span></div>
@@ -116,6 +129,8 @@ function ProductPage() {
           </div>
         </section>
       )}
+
+      <RecentlyViewed excludeId={product.id}/>
     </Layout>
   );
 }

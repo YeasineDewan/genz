@@ -1,9 +1,10 @@
 import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
 import { useProducts } from "@/lib/store";
-import type { Category } from "@/lib/types";
-import { useMemo } from "react";
+import type { Category, Product } from "@/lib/types";
+import { useMemo, useState } from "react";
 
 type ShopSearch = { category?: Category | "all"; q?: string; sort?: "new" | "price-asc" | "price-desc" };
 
@@ -28,6 +29,7 @@ function Shop() {
   const search = useSearch({ from: "/shop" });
   const navigate = useNavigate({ from: "/shop" });
   const products = useProducts();
+  const [quickView, setQuickView] = useState<Product | null>(null);
 
   const filtered = useMemo(() => {
     let r = products;
@@ -95,10 +97,11 @@ function Shop() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} />)}
+            {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} onQuickView={setQuickView}/>)}
           </div>
         )}
       </section>
+      <QuickViewModal product={quickView} onClose={() => setQuickView(null)}/>
     </Layout>
   );
 }
