@@ -3,14 +3,15 @@ import { Layout } from "@/components/Layout";
 import {
   useProducts, useUser, saveProduct, deleteProduct, formatPrice,
   useCategories, saveCategory, deleteCategory,
-  useOrders, updateOrderStatus,
+  useOrders, updateOrderStatus, updateOrderShipping,
+  useFunnelEvents, useStockAudit,
 } from "@/lib/store";
-import type { Product, CategoryDef, OrderStatus } from "@/lib/types";
+import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
-  ImagePlus, GripVertical,
+  ImagePlus, GripVertical, History, Save, Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 
