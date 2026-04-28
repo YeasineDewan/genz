@@ -46,6 +46,14 @@ function OrderPage() {
     toast.success("Tracking number copied");
   };
 
+  const canCancel = order.status === "pending" || order.status === "processing";
+  const handleCancel = () => {
+    if (!canCancel) return;
+    if (!confirm("Cancel this order? Items will be restocked.")) return;
+    cancelOrder(order.id, "Cancelled by customer");
+    toast.success("Order cancelled");
+  };
+
   return (
     <Layout>
       <section className="mx-auto max-w-4xl px-4 py-10 space-y-6">
