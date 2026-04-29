@@ -5,7 +5,7 @@ import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
-  Review, Coupon,
+  Review, ReviewStatus, Coupon,
 } from "./types";
 
 const KEYS = {
