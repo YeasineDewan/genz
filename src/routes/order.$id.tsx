@@ -34,11 +34,12 @@ function OrderPage() {
   if (!order) throw notFound();
 
   const currentIdx = STEPS.findIndex((s) => s.key === order.status);
-  const subtotal = order.items.reduce((sum, it) => {
+  const subtotal = order.subtotal ?? order.items.reduce((sum, it) => {
     const p = products.find((x) => x.id === it.productId);
     return sum + (p?.price ?? 0) * it.qty;
   }, 0);
-  const shipping = order.total - subtotal;
+  const discount = order.discount ?? 0;
+  const shipping = order.shippingFee ?? Math.max(0, order.total - subtotal + discount);
 
   const copyTracking = () => {
     if (!order.trackingNumber) return;
