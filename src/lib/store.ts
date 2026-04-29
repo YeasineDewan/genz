@@ -168,7 +168,9 @@ export const getOrders = (userId?: string): Order[] => {
   const all = read<Order[]>(KEYS.orders, []);
   return userId ? all.filter((o) => o.userId === userId) : all;
 };
-export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "tracking" | "trackingNumber" | "carrier">): Order => {
+export const placeOrder = (
+  o: Omit<Order, "id" | "createdAt" | "status" | "tracking" | "trackingNumber" | "carrier">
+): Order => {
   const now = Date.now();
   const trackingNumber = "GZ" + Math.random().toString(36).slice(2, 10).toUpperCase();
   const order: Order = {
@@ -183,13 +185,17 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
   const all = read<Order[]>(KEYS.orders, []);
   all.unshift(order);
   write(KEYS.orders, all);
-  // Decrement stock + audit
+  // Decrement stock + audit (variant-aware)
   const products = getProducts();
   o.items.forEach((it) => {
     const p = products.find((x) => x.id === it.productId);
     if (!p) return;
     const before = p.stock;
     p.stock = Math.max(0, p.stock - it.qty);
+    if (p.variants && p.variants.length > 0) {
+      const v = p.variants.find((x) => x.size === it.size && x.color === it.color);
+      if (v) v.stock = Math.max(0, v.stock - it.qty);
+    }
     appendStockAudit({
       id: crypto.randomUUID(),
       productId: p.id,
@@ -198,11 +204,15 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
       after: p.stock,
       delta: p.stock - before,
       source: "order",
-      note: `Order #${order.id.slice(0, 8)}`,
+      note: `Order #${order.id.slice(0, 8)} (${it.size}/${it.color})`,
       at: now,
     });
   });
   write(KEYS.products, products);
+  if (o.couponCode) {
+    const c = findCoupon(o.couponCode);
+    if (c) consumeCoupon(c.id);
+  }
   trackFunnel("order_completed");
   return order;
 };
