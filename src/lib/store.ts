@@ -417,15 +417,18 @@ export const useOrder = (id: string) => {
   return useMemo(() => all.find((o) => o.id === id), [all, id]);
 };
 
-export const useReviews = () => useStore(getReviews);
+export const useReviews = () => useStore(getReviews); // all (for admin moderation)
 export const useProductReviews = (productId: string) => {
   const all = useStore(getReviews);
-  return useMemo(() => all.filter((r) => r.productId === productId), [all, productId]);
+  return useMemo(
+    () => all.filter((r) => r.productId === productId && (r.status ?? "approved") === "approved"),
+    [all, productId],
+  );
 };
 export const useProductRating = (productId: string) => {
   const all = useStore(getReviews);
   return useMemo(() => {
-    const rs = all.filter((r) => r.productId === productId);
+    const rs = all.filter((r) => r.productId === productId && (r.status ?? "approved") === "approved");
     return rs.length === 0
       ? { avg: 0, count: 0 }
       : { avg: rs.reduce((s, r) => s + r.rating, 0) / rs.length, count: rs.length };
