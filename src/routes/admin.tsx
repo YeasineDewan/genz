@@ -461,6 +461,8 @@ function ProductDrawer({ product, onClose }: { product: Product; onClose: () => 
             )}
           </Field>
 
+          <VariantMatrix product={p} onChange={(variants, total) => setP({ ...p, variants, stock: total })}/>
+
           <button className="btn-pop w-full justify-center mt-3">Save product</button>
         </div>
         <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
