@@ -1,8 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice, trackFunnel } from "@/lib/store";
-import { useEffect } from "react";
-import { useState } from "react";
+import { CouponInput } from "@/components/CouponInput";
+import {
+  useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice,
+  trackFunnel, useAppliedCoupon, validateCoupon, setAppliedCoupon,
+} from "@/lib/store";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/checkout")({
