@@ -70,6 +70,8 @@ function Admin() {
         {tab === "categories" && <Categories/>}
         {tab === "orders" && <Orders/>}
         {tab === "inventory" && <Inventory/>}
+        {tab === "coupons" && <Coupons/>}
+        {tab === "reviews" && <ReviewsModeration/>}
       </section>
     </Layout>
   );
