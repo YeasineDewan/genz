@@ -21,6 +21,7 @@ const KEYS = {
   wishlist: "genz.wishlist",
   recent: "genz.recent",
   coupons: "genz.coupons",
+  appliedCoupon: "genz.appliedCoupon",
 } as const;
 
 export const defaultCategories: CategoryDef[] = [
