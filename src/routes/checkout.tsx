@@ -20,6 +20,10 @@ function Checkout() {
   const navigate = useNavigate();
   const total = cartTotal(cart, products);
   const ship = total >= 80 || total === 0 ? 0 : 8;
+  const applied = useAppliedCoupon();
+  const couponResult = applied ? validateCoupon(applied, total) : null;
+  const discount = couponResult?.ok ? couponResult.discount : 0;
+  const grand = Math.max(0, total + ship - discount);
   const [form, setForm] = useState({
     name: user?.name ?? "",
     email: user?.email ?? "",
@@ -48,10 +52,15 @@ function Checkout() {
       const order = placeOrder({
         userId: user?.id ?? "guest",
         items: cart,
-        total: total + ship,
+        subtotal: total,
+        shippingFee: ship,
+        discount,
+        couponCode: discount > 0 && couponResult?.ok ? couponResult.coupon.code : undefined,
+        total: grand,
         shipping: { name: form.name, address: form.address, city: form.city, zip: form.zip, country: form.country },
       });
       clearCart();
+      setAppliedCoupon(null);
       setLoading(false);
       toast.success("Order placed! 🎉");
       navigate({ to: "/order/$id", params: { id: order.id } });
