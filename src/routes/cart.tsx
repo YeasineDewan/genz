@@ -1,6 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice, trackFunnel } from "@/lib/store";
+import { CouponInput } from "@/components/CouponInput";
+import {
+  useCart, useProducts, removeFromCart, updateCartQty,
+  cartTotal, formatPrice, trackFunnel,
+  useAppliedCoupon, validateCoupon,
+} from "@/lib/store";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -12,8 +17,12 @@ export const Route = createFileRoute("/cart")({
 function CartPage() {
   const cart = useCart();
   const products = useProducts();
+  const applied = useAppliedCoupon();
   const total = cartTotal(cart, products);
   const ship = total >= 80 || total === 0 ? 0 : 8;
+  const couponResult = applied ? validateCoupon(applied, total) : null;
+  const discount = couponResult?.ok ? couponResult.discount : 0;
+  const grand = Math.max(0, total + ship - discount);
 
   useEffect(() => { if (cart.length > 0) trackFunnel("cart_viewed"); }, []);
 
@@ -55,9 +64,15 @@ function CartPage() {
             </div>
             <aside className="sticker rounded-2xl bg-pop-yellow p-6 h-fit space-y-3">
               <h3 className="text-2xl">Summary</h3>
+              <CouponInput subtotal={total}/>
               <div className="flex justify-between text-sm"><span>Subtotal</span><span>{formatPrice(total)}</span></div>
+              {discount > 0 && (
+                <div className="flex justify-between text-sm text-pop-pink font-bold">
+                  <span>Discount ({applied})</span><span>−{formatPrice(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm"><span>Shipping</span><span>{ship === 0 ? "FREE" : formatPrice(ship)}</span></div>
-              <div className="border-t-2 border-ink pt-3 flex justify-between font-display text-2xl"><span>Total</span><span>{formatPrice(total + ship)}</span></div>
+              <div className="border-t-2 border-ink pt-3 flex justify-between font-display text-2xl"><span>Total</span><span>{formatPrice(grand)}</span></div>
               <Link to="/checkout" className="btn-pop w-full justify-center mt-2">Checkout →</Link>
             </aside>
           </div>
