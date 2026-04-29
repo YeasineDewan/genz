@@ -225,7 +225,7 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
   o.status = status;
   o.tracking = [...(o.tracking ?? []), { status, at: Date.now(), note }];
   write(KEYS.orders, all);
-  // If transitioning into cancelled, restock items
+  // If transitioning into cancelled, restock items (variant-aware)
   if (status === "cancelled" && !wasCancelled) {
     const products = getProducts();
     o.items.forEach((it) => {
@@ -233,6 +233,10 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
       if (!p) return;
       const before = p.stock;
       p.stock = before + it.qty;
+      if (p.variants && p.variants.length > 0) {
+        const v = p.variants.find((x) => x.size === it.size && x.color === it.color);
+        if (v) v.stock = v.stock + it.qty;
+      }
       appendStockAudit({
         id: crypto.randomUUID(),
         productId: p.id,
@@ -241,7 +245,7 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
         after: p.stock,
         delta: it.qty,
         source: "cancellation",
-        note: `Order #${o.id.slice(0, 8)} cancelled`,
+        note: `Order #${o.id.slice(0, 8)} cancelled (${it.size}/${it.color})`,
         at: Date.now(),
       });
     });
