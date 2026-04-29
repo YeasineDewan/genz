@@ -149,6 +149,12 @@ function OrderPage() {
             </div>
             <div className="border-t-2 border-ink mt-4 pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
+              {discount > 0 && (
+                <div className="flex justify-between text-pop-pink font-bold">
+                  <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}</span>
+                  <span>−{formatPrice(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between"><span>Shipping</span><span>{shipping > 0 ? formatPrice(shipping) : "FREE"}</span></div>
               <div className="flex justify-between font-display text-2xl pt-2"><span>Total</span><span>{formatPrice(order.total)}</span></div>
             </div>
