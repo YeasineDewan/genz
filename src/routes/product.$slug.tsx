@@ -40,6 +40,9 @@ function ProductPage() {
   const [color, setColor] = useState(product.colors[0]);
   const [qty, setQty] = useState(1);
   const rating = useProductRating(product.id);
+  const variantStock = getVariantStock(product, size, color);
+  const hasVariants = !!(product.variants && product.variants.length > 0);
+  const outOfStock = hasVariants ? variantStock === 0 : product.stock === 0;
 
   useEffect(() => { trackRecent(product.id); }, [product.id]);
 
@@ -49,6 +52,8 @@ function ProductPage() {
   };
 
   const handleAdd = () => {
+    if (outOfStock) { toast.error("That size/color is sold out"); return; }
+    if (hasVariants && qty > variantStock) { toast.error(`Only ${variantStock} available in ${size}/${color}`); return; }
     addToCart({ productId: product.id, size, color, qty });
     toast.success(`${product.name} added to bag`, { description: `${size} · ${color}` });
   };
