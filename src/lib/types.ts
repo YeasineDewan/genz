@@ -7,6 +7,12 @@ export interface CategoryDef {
   emoji?: string;
 }
 
+export interface VariantStock {
+  size: string;
+  color: string;
+  stock: number;
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -19,7 +25,8 @@ export interface Product {
   sizes: string[];
   description: string;
   badge?: string;
-  stock: number;
+  stock: number;          // total fallback stock (sum of variants when variants exist)
+  variants?: VariantStock[]; // optional per-size/color inventory
 }
 
 export interface CartItem {
@@ -77,6 +84,7 @@ export interface StockAuditEntry {
   actor?: string;
 }
 
+export type ReviewStatus = "pending" | "approved" | "hidden";
 export interface Review {
   id: string;
   productId: string;
@@ -86,6 +94,8 @@ export interface Review {
   title: string;
   body: string;
   at: number;
+  status?: ReviewStatus; // default approved (back-compat)
+  reports?: number;
 }
 
 export type CouponType = "percent" | "fixed";
