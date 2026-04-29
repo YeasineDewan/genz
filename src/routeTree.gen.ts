@@ -18,6 +18,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WishlistShareRouteImport } from './routes/wishlist.share'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
 
@@ -66,6 +67,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WishlistShareRoute = WishlistShareRouteImport.update({
+  id: '/share',
+  path: '/share',
+  getParentRoute: () => WishlistRoute,
+} as any)
 const ProductSlugRoute = ProductSlugRouteImport.update({
   id: '/product/$slug',
   path: '/product/$slug',
@@ -86,9 +92,10 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/shop': typeof ShopRoute
   '/signup': typeof SignupRoute
-  '/wishlist': typeof WishlistRoute
+  '/wishlist': typeof WishlistRouteWithChildren
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
+  '/wishlist/share': typeof WishlistShareRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -99,9 +106,10 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/shop': typeof ShopRoute
   '/signup': typeof SignupRoute
-  '/wishlist': typeof WishlistRoute
+  '/wishlist': typeof WishlistRouteWithChildren
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
+  '/wishlist/share': typeof WishlistShareRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,9 +121,10 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/shop': typeof ShopRoute
   '/signup': typeof SignupRoute
-  '/wishlist': typeof WishlistRoute
+  '/wishlist': typeof WishlistRouteWithChildren
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
+  '/wishlist/share': typeof WishlistShareRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/order/$id'
     | '/product/$slug'
+    | '/wishlist/share'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/order/$id'
     | '/product/$slug'
+    | '/wishlist/share'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/order/$id'
     | '/product/$slug'
+    | '/wishlist/share'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -168,7 +180,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   ShopRoute: typeof ShopRoute
   SignupRoute: typeof SignupRoute
-  WishlistRoute: typeof WishlistRoute
+  WishlistRoute: typeof WishlistRouteWithChildren
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
 }
@@ -238,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wishlist/share': {
+      id: '/wishlist/share'
+      path: '/share'
+      fullPath: '/wishlist/share'
+      preLoaderRoute: typeof WishlistShareRouteImport
+      parentRoute: typeof WishlistRoute
+    }
     '/product/$slug': {
       id: '/product/$slug'
       path: '/product/$slug'
@@ -255,6 +274,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface WishlistRouteChildren {
+  WishlistShareRoute: typeof WishlistShareRoute
+}
+
+const WishlistRouteChildren: WishlistRouteChildren = {
+  WishlistShareRoute: WishlistShareRoute,
+}
+
+const WishlistRouteWithChildren = WishlistRoute._addFileChildren(
+  WishlistRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRoute,
@@ -264,7 +295,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   ShopRoute: ShopRoute,
   SignupRoute: SignupRoute,
-  WishlistRoute: WishlistRoute,
+  WishlistRoute: WishlistRouteWithChildren,
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,
 }
