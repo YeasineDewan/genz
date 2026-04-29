@@ -297,16 +297,34 @@ export const appendStockAudit = (entry: StockAuditEntry) => {
 };
 
 // --- Reviews ---
+const isVisible = (r: Review) => (r.status ?? "approved") === "approved";
 export const getReviews = (): Review[] => read(KEYS.reviews, []);
-export const getProductReviews = (productId: string) => getReviews().filter((r) => r.productId === productId);
+export const getProductReviews = (productId: string) =>
+  getReviews().filter((r) => r.productId === productId && isVisible(r));
 export const addReview = (r: Omit<Review, "id" | "at">): Review => {
-  const review: Review = { ...r, id: crypto.randomUUID(), at: Date.now() };
+  const review: Review = { status: "approved", reports: 0, ...r, id: crypto.randomUUID(), at: Date.now() };
   const list = getReviews();
   list.unshift(review);
   write(KEYS.reviews, list);
   return review;
 };
 export const deleteReview = (id: string) => write(KEYS.reviews, getReviews().filter((r) => r.id !== id));
+export const setReviewStatus = (id: string, status: ReviewStatus) => {
+  const list = getReviews();
+  const r = list.find((x) => x.id === id);
+  if (!r) return;
+  r.status = status;
+  write(KEYS.reviews, list);
+};
+export const reportReview = (id: string) => {
+  const list = getReviews();
+  const r = list.find((x) => x.id === id);
+  if (!r) return;
+  r.reports = (r.reports ?? 0) + 1;
+  // auto-flag for moderation after 3 reports
+  if ((r.reports ?? 0) >= 3 && (r.status ?? "approved") === "approved") r.status = "pending";
+  write(KEYS.reviews, list);
+};
 export const productRating = (productId: string): { avg: number; count: number } => {
   const rs = getProductReviews(productId);
   if (rs.length === 0) return { avg: 0, count: 0 };
