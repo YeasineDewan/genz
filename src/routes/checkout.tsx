@@ -117,13 +117,19 @@ function Checkout() {
                 );
               })}
             </div>
+            <CouponInput subtotal={total}/>
             <div className="border-t-2 border-ink pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(total)}</span></div>
+              {discount > 0 && (
+                <div className="flex justify-between text-pop-pink font-bold">
+                  <span>Discount ({applied})</span><span>−{formatPrice(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between"><span>Shipping</span><span>{ship ? formatPrice(ship) : "FREE"}</span></div>
-              <div className="flex justify-between font-display text-2xl pt-2"><span>Total</span><span>{formatPrice(total+ship)}</span></div>
+              <div className="flex justify-between font-display text-2xl pt-2"><span>Total</span><span>{formatPrice(grand)}</span></div>
             </div>
             <button disabled={loading} type="submit" className="btn-pop w-full justify-center disabled:opacity-60">
-              {loading ? "Processing..." : `Pay ${formatPrice(total+ship)}`}
+              {loading ? "Processing..." : `Pay ${formatPrice(grand)}`}
             </button>
           </aside>
         </form>
