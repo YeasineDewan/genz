@@ -5,7 +5,7 @@ import { Reviews } from "@/components/Reviews";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { WishlistButton } from "@/components/WishlistButton";
 import { Stars } from "@/components/Stars";
-import { useProducts, addToCart, formatPrice, trackRecent, useProductRating } from "@/lib/store";
+import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, sizeHasStock, colorHasStock } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
 import { toast } from "sonner";
