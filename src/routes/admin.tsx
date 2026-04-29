@@ -5,13 +5,15 @@ import {
   useCategories, saveCategory, deleteCategory,
   useOrders, updateOrderStatus, updateOrderShipping,
   useFunnelEvents, useStockAudit,
+  useCoupons, saveCoupon, deleteCoupon,
+  useReviews, setReviewStatus, deleteReview,
 } from "@/lib/store";
-import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry } from "@/lib/types";
+import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
-  ImagePlus, GripVertical, History, Save, Edit3,
+  ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,7 +22,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory";
+type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews";
 
 const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
   { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -28,7 +30,10 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "categories", label: "Categories", Icon: Tag },
   { key: "orders", label: "Orders", Icon: Truck },
   { key: "inventory", label: "Inventory", Icon: Boxes },
+  { key: "coupons", label: "Coupons", Icon: Ticket },
+  { key: "reviews", label: "Reviews", Icon: MessageSquare },
 ];
+
 
 const ORDER_STATUSES: OrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"];
 
@@ -65,6 +70,8 @@ function Admin() {
         {tab === "categories" && <Categories/>}
         {tab === "orders" && <Orders/>}
         {tab === "inventory" && <Inventory/>}
+        {tab === "coupons" && <Coupons/>}
+        {tab === "reviews" && <ReviewsModeration/>}
       </section>
     </Layout>
   );
@@ -454,6 +461,8 @@ function ProductDrawer({ product, onClose }: { product: Product; onClose: () => 
             )}
           </Field>
 
+          <VariantMatrix product={p} onChange={(variants, total) => setP({ ...p, variants, stock: total })}/>
+
           <button className="btn-pop w-full justify-center mt-3">Save product</button>
         </div>
         <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
@@ -811,6 +820,365 @@ function Inventory() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ───────────── Variant matrix ───────────── */
+
+function VariantMatrix({
+  product, onChange,
+}: { product: Product; onChange: (variants: VariantStock[] | undefined, total: number) => void }) {
+  const enabled = !!(product.variants && product.variants.length > 0);
+  const sizes = product.sizes;
+  const colors = product.colors;
+
+  const enable = () => {
+    const variants: VariantStock[] = [];
+    sizes.forEach((s) => colors.forEach((c) => variants.push({ size: s, color: c, stock: 0 })));
+    onChange(variants, 0);
+  };
+  const disable = () => onChange(undefined, product.stock);
+
+  // Sync matrix with current sizes/colors (preserve stock for existing combos)
+  const syncedVariants = useMemo<VariantStock[]>(() => {
+    if (!enabled) return [];
+    const map = new Map((product.variants ?? []).map((v) => [`${v.size}__${v.color}`, v.stock]));
+    const out: VariantStock[] = [];
+    sizes.forEach((s) => colors.forEach((c) => {
+      out.push({ size: s, color: c, stock: map.get(`${s}__${c}`) ?? 0 });
+    }));
+    return out;
+  }, [enabled, product.variants, sizes, colors]);
+
+  // If matrix dimensions changed, push the synced version up
+  useEffect(() => {
+    if (!enabled) return;
+    const cur = product.variants ?? [];
+    if (cur.length !== syncedVariants.length) {
+      const total = syncedVariants.reduce((s, v) => s + v.stock, 0);
+      onChange(syncedVariants, total);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncedVariants.length, enabled]);
+
+  const updateCell = (size: string, color: string, stock: number) => {
+    const next = (product.variants ?? []).map((v) =>
+      v.size === size && v.color === color ? { ...v, stock: Math.max(0, stock) } : v,
+    );
+    const total = next.reduce((s, v) => s + v.stock, 0);
+    onChange(next, total);
+  };
+
+  const fillAll = (n: number) => {
+    const next = (product.variants ?? []).map((v) => ({ ...v, stock: n }));
+    onChange(next, next.reduce((s, v) => s + v.stock, 0));
+  };
+
+  const total = (product.variants ?? []).reduce((s, v) => s + v.stock, 0);
+
+  return (
+    <div className="border-[3px] border-ink rounded-xl bg-pop-yellow/30 p-3 space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <div className="font-bold text-sm uppercase">Per-variant stock</div>
+          <div className="text-xs text-muted-foreground">Track inventory by size × color</div>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input type="checkbox" checked={enabled} onChange={(e) => e.target.checked ? enable() : disable()} className="h-4 w-4"/>
+          Enable
+        </label>
+      </div>
+
+      {enabled && (
+        <>
+          {sizes.length === 0 || colors.length === 0 ? (
+            <p className="text-xs text-destructive">Add at least one size and one color above.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left p-1 text-xs uppercase font-bold">Size \ Color</th>
+                      {colors.map((c) => <th key={c} className="p-1 text-xs uppercase font-bold">{c}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sizes.map((s) => (
+                      <tr key={s}>
+                        <td className="p-1 font-bold text-xs uppercase">{s}</td>
+                        {colors.map((c) => {
+                          const v = (product.variants ?? []).find((x) => x.size === s && x.color === c);
+                          return (
+                            <td key={c} className="p-1">
+                              <input type="number" min="0" value={v?.stock ?? 0}
+                                onChange={(e) => updateCell(s, c, +e.target.value)}
+                                className={`w-full text-center border-2 border-ink rounded-md py-1 ${(v?.stock ?? 0) === 0 ? "bg-destructive/10" : "bg-white"}`}/>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="font-bold">Total: {total} units</span>
+                <div className="flex gap-1">
+                  {[0, 5, 10, 25].map((n) => (
+                    <button key={n} type="button" onClick={() => fillAll(n)} className="chip text-xs">Set all to {n}</button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── Coupons ───────────── */
+
+function emptyCoupon(): Coupon {
+  return {
+    id: crypto.randomUUID(), code: "", type: "percent", value: 10,
+    uses: 0, active: true,
+  };
+}
+
+function Coupons() {
+  const coupons = useCoupons();
+  const [editing, setEditing] = useState<Coupon | null>(null);
+  const sorted = useMemo(() => [...coupons].sort((a, b) => Number(b.active) - Number(a.active)), [coupons]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-3xl">Promo codes</h2>
+          <p className="text-sm text-muted-foreground">Reward your loudest fans. Percent or fixed-amount discounts.</p>
+        </div>
+        <button onClick={() => setEditing(emptyCoupon())} className="btn-pop"><Plus size={16}/> New code</button>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="sticker rounded-2xl bg-white p-12 text-center">
+          <Ticket className="mx-auto mb-3" size={36}/>
+          <p className="font-bold mb-1">No coupons yet</p>
+          <p className="text-sm text-muted-foreground">Create your first promo code to drive conversions.</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sorted.map((c) => {
+            const expired = c.expiresAt && c.expiresAt < Date.now();
+            const exhausted = c.maxUses && c.uses >= c.maxUses;
+            const live = c.active && !expired && !exhausted;
+            return (
+              <div key={c.id} className={`sticker rounded-2xl p-5 ${live ? "bg-pop-yellow" : "bg-white"}`}>
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <div className="font-mono font-display text-3xl tracking-wider truncate">{c.code}</div>
+                    <div className="text-sm font-bold mt-1">
+                      {c.type === "percent" ? `${c.value}% off` : `${formatPrice(c.value)} off`}
+                      {c.minSubtotal ? ` · min ${formatPrice(c.minSubtotal)}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`chip text-xs ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : "bg-muted"}`}>
+                      {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : "Inactive"}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
+                  <div>Uses: <span className="font-bold text-ink">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
+                  {c.expiresAt && <div>Expires: <span className="font-bold text-ink">{new Date(c.expiresAt).toLocaleDateString()}</span></div>}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/> Edit</button>
+                  <button onClick={() => navigator.clipboard.writeText(c.code).then(() => toast.success("Copied"))} className="chip">Copy</button>
+                  <button onClick={() => { if (confirm(`Delete "${c.code}"?`)) { deleteCoupon(c.id); toast.success("Deleted"); } }}
+                    className="chip bg-destructive text-white ml-auto"><Trash2 size={12}/></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editing && <CouponDrawer coupon={editing} onClose={() => setEditing(null)}/>}
+    </div>
+  );
+}
+
+function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void }) {
+  const [c, setC] = useState<Coupon>(coupon);
+  const [expires, setExpires] = useState<string>(
+    coupon.expiresAt ? new Date(coupon.expiresAt).toISOString().slice(0, 10) : "",
+  );
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = c.code.trim().toUpperCase();
+    if (!code) return toast.error("Code required");
+    if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return toast.error("Code must be 3–20 letters/digits");
+    if (!(c.value > 0)) return toast.error("Value must be > 0");
+    if (c.type === "percent" && c.value > 100) return toast.error("Percent can't exceed 100");
+    saveCoupon({
+      ...c,
+      code,
+      expiresAt: expires ? new Date(expires).getTime() : undefined,
+      minSubtotal: c.minSubtotal && c.minSubtotal > 0 ? c.minSubtotal : undefined,
+      maxUses: c.maxUses && c.maxUses > 0 ? c.maxUses : undefined,
+    });
+    toast.success("Saved");
+    onClose();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-ink/40" onClick={onClose}/>
+      <form onSubmit={save} className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between">
+          <h3 className="text-2xl">{coupon.code ? "Edit coupon" : "New coupon"}</h3>
+          <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white text-ink"><X size={16}/></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <Field label="Code">
+            <input value={c.code} onChange={(e) => setC({ ...c, code: e.target.value.toUpperCase() })}
+              className="inp font-mono uppercase tracking-wider" maxLength={20} placeholder="SUMMER25"/>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Type">
+              <select value={c.type} onChange={(e) => setC({ ...c, type: e.target.value as "percent" | "fixed" })} className="inp">
+                <option value="percent">% Percent</option>
+                <option value="fixed">$ Fixed</option>
+              </select>
+            </Field>
+            <Field label={c.type === "percent" ? "Value (%)" : "Value ($)"}>
+              <input type="number" min="0" step="0.01" value={c.value}
+                onChange={(e) => setC({ ...c, value: +e.target.value })} className="inp"/>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Min subtotal ($)">
+              <input type="number" min="0" step="0.01" value={c.minSubtotal ?? ""}
+                onChange={(e) => setC({ ...c, minSubtotal: e.target.value ? +e.target.value : undefined })}
+                className="inp" placeholder="optional"/>
+            </Field>
+            <Field label="Max uses">
+              <input type="number" min="0" value={c.maxUses ?? ""}
+                onChange={(e) => setC({ ...c, maxUses: e.target.value ? +e.target.value : undefined })}
+                className="inp" placeholder="unlimited"/>
+            </Field>
+          </div>
+          <Field label="Expires (optional)">
+            <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+          </Field>
+          <label className="flex items-center gap-2 mt-2 font-bold text-sm">
+            <input type="checkbox" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} className="h-4 w-4"/>
+            Active
+          </label>
+          <button className="btn-pop w-full justify-center mt-3">Save coupon</button>
+        </div>
+        <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
+      </form>
+    </div>
+  );
+}
+
+/* ───────────── Reviews moderation ───────────── */
+
+function ReviewsModeration() {
+  const reviews = useReviews();
+  const products = useProducts();
+  const [filter, setFilter] = useState<ReviewStatus | "all" | "reported">("all");
+
+  const counts = useMemo(() => ({
+    all: reviews.length,
+    approved: reviews.filter((r) => (r.status ?? "approved") === "approved").length,
+    pending: reviews.filter((r) => r.status === "pending").length,
+    hidden: reviews.filter((r) => r.status === "hidden").length,
+    reported: reviews.filter((r) => (r.reports ?? 0) > 0).length,
+  }), [reviews]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return reviews;
+    if (filter === "reported") return reviews.filter((r) => (r.reports ?? 0) > 0);
+    return reviews.filter((r) => (r.status ?? "approved") === filter);
+  }, [reviews, filter]);
+
+  const FilterChip = ({ k, label }: { k: typeof filter; label: string }) => (
+    <button onClick={() => setFilter(k)} className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
+      {label} ({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})
+    </button>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-3xl">Review moderation</h2>
+        <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <FilterChip k="all" label="All"/>
+        <FilterChip k="approved" label="Approved"/>
+        <FilterChip k="pending" label="Pending"/>
+        <FilterChip k="hidden" label="Hidden"/>
+        <FilterChip k="reported" label="Reported"/>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews here.</div>
+      ) : (
+        <ul className="space-y-3">
+          {filtered.map((r) => {
+            const p = products.find((x) => x.id === r.productId);
+            const status = r.status ?? "approved";
+            const reports = r.reports ?? 0;
+            return (
+              <li key={r.id} className="sticker rounded-2xl bg-white p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {p && <img src={p.image} alt="" className="h-12 w-12 rounded border-2 border-ink object-cover shrink-0"/>}
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{p?.name ?? "(deleted)"}</div>
+                      <div className="font-bold flex items-center gap-2 flex-wrap">
+                        <span>{r.title}</span>
+                        <span className="text-pop-pink">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                      </div>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{r.body}</p>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        by {r.userName} · {new Date(r.at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
+                      {status}
+                    </span>
+                    {reports > 0 && (
+                      <span className="chip bg-destructive text-white text-xs"><Flag size={10}/> {reports}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                  {status !== "approved" && (
+                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
+                  )}
+                  {status !== "hidden" && (
+                    <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
+                  )}
+                  {status === "hidden" && (
+                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip"><Eye size={12}/> Show</button>
+                  )}
+                  <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
+                    className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

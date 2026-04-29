@@ -5,7 +5,7 @@ import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
-  Review, Coupon,
+  Review, ReviewStatus, Coupon,
 } from "./types";
 
 const KEYS = {
@@ -21,6 +21,7 @@ const KEYS = {
   wishlist: "genz.wishlist",
   recent: "genz.recent",
   coupons: "genz.coupons",
+  appliedCoupon: "genz.appliedCoupon",
 } as const;
 
 export const defaultCategories: CategoryDef[] = [
@@ -167,7 +168,9 @@ export const getOrders = (userId?: string): Order[] => {
   const all = read<Order[]>(KEYS.orders, []);
   return userId ? all.filter((o) => o.userId === userId) : all;
 };
-export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "tracking" | "trackingNumber" | "carrier">): Order => {
+export const placeOrder = (
+  o: Omit<Order, "id" | "createdAt" | "status" | "tracking" | "trackingNumber" | "carrier">
+): Order => {
   const now = Date.now();
   const trackingNumber = "GZ" + Math.random().toString(36).slice(2, 10).toUpperCase();
   const order: Order = {
@@ -182,13 +185,17 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
   const all = read<Order[]>(KEYS.orders, []);
   all.unshift(order);
   write(KEYS.orders, all);
-  // Decrement stock + audit
+  // Decrement stock + audit (variant-aware)
   const products = getProducts();
   o.items.forEach((it) => {
     const p = products.find((x) => x.id === it.productId);
     if (!p) return;
     const before = p.stock;
     p.stock = Math.max(0, p.stock - it.qty);
+    if (p.variants && p.variants.length > 0) {
+      const v = p.variants.find((x) => x.size === it.size && x.color === it.color);
+      if (v) v.stock = Math.max(0, v.stock - it.qty);
+    }
     appendStockAudit({
       id: crypto.randomUUID(),
       productId: p.id,
@@ -197,11 +204,15 @@ export const placeOrder = (o: Omit<Order, "id" | "createdAt" | "status" | "track
       after: p.stock,
       delta: p.stock - before,
       source: "order",
-      note: `Order #${order.id.slice(0, 8)}`,
+      note: `Order #${order.id.slice(0, 8)} (${it.size}/${it.color})`,
       at: now,
     });
   });
   write(KEYS.products, products);
+  if (o.couponCode) {
+    const c = findCoupon(o.couponCode);
+    if (c) consumeCoupon(c.id);
+  }
   trackFunnel("order_completed");
   return order;
 };
@@ -214,7 +225,7 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
   o.status = status;
   o.tracking = [...(o.tracking ?? []), { status, at: Date.now(), note }];
   write(KEYS.orders, all);
-  // If transitioning into cancelled, restock items
+  // If transitioning into cancelled, restock items (variant-aware)
   if (status === "cancelled" && !wasCancelled) {
     const products = getProducts();
     o.items.forEach((it) => {
@@ -222,6 +233,10 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
       if (!p) return;
       const before = p.stock;
       p.stock = before + it.qty;
+      if (p.variants && p.variants.length > 0) {
+        const v = p.variants.find((x) => x.size === it.size && x.color === it.color);
+        if (v) v.stock = v.stock + it.qty;
+      }
       appendStockAudit({
         id: crypto.randomUUID(),
         productId: p.id,
@@ -230,7 +245,7 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
         after: p.stock,
         delta: it.qty,
         source: "cancellation",
-        note: `Order #${o.id.slice(0, 8)} cancelled`,
+        note: `Order #${o.id.slice(0, 8)} cancelled (${it.size}/${it.color})`,
         at: Date.now(),
       });
     });
@@ -282,16 +297,34 @@ export const appendStockAudit = (entry: StockAuditEntry) => {
 };
 
 // --- Reviews ---
+const isVisible = (r: Review) => (r.status ?? "approved") === "approved";
 export const getReviews = (): Review[] => read(KEYS.reviews, []);
-export const getProductReviews = (productId: string) => getReviews().filter((r) => r.productId === productId);
+export const getProductReviews = (productId: string) =>
+  getReviews().filter((r) => r.productId === productId && isVisible(r));
 export const addReview = (r: Omit<Review, "id" | "at">): Review => {
-  const review: Review = { ...r, id: crypto.randomUUID(), at: Date.now() };
+  const review: Review = { status: "approved", reports: 0, ...r, id: crypto.randomUUID(), at: Date.now() };
   const list = getReviews();
   list.unshift(review);
   write(KEYS.reviews, list);
   return review;
 };
 export const deleteReview = (id: string) => write(KEYS.reviews, getReviews().filter((r) => r.id !== id));
+export const setReviewStatus = (id: string, status: ReviewStatus) => {
+  const list = getReviews();
+  const r = list.find((x) => x.id === id);
+  if (!r) return;
+  r.status = status;
+  write(KEYS.reviews, list);
+};
+export const reportReview = (id: string) => {
+  const list = getReviews();
+  const r = list.find((x) => x.id === id);
+  if (!r) return;
+  r.reports = (r.reports ?? 0) + 1;
+  // auto-flag for moderation after 3 reports
+  if ((r.reports ?? 0) >= 3 && (r.status ?? "approved") === "approved") r.status = "pending";
+  write(KEYS.reviews, list);
+};
 export const productRating = (productId: string): { avg: number; count: number } => {
   const rs = getProductReviews(productId);
   if (rs.length === 0) return { avg: 0, count: 0 };
@@ -384,15 +417,18 @@ export const useOrder = (id: string) => {
   return useMemo(() => all.find((o) => o.id === id), [all, id]);
 };
 
-export const useReviews = () => useStore(getReviews);
+export const useReviews = () => useStore(getReviews); // all (for admin moderation)
 export const useProductReviews = (productId: string) => {
   const all = useStore(getReviews);
-  return useMemo(() => all.filter((r) => r.productId === productId), [all, productId]);
+  return useMemo(
+    () => all.filter((r) => r.productId === productId && (r.status ?? "approved") === "approved"),
+    [all, productId],
+  );
 };
 export const useProductRating = (productId: string) => {
   const all = useStore(getReviews);
   return useMemo(() => {
-    const rs = all.filter((r) => r.productId === productId);
+    const rs = all.filter((r) => r.productId === productId && (r.status ?? "approved") === "approved");
     return rs.length === 0
       ? { avg: 0, count: 0 }
       : { avg: rs.reduce((s, r) => s + r.rating, 0) / rs.length, count: rs.length };
@@ -424,6 +460,28 @@ export const useEnsureSeeded = () => {
 
 export const formatPrice = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+
+// --- Variant stock helpers ---
+export const getVariantStock = (p: Product, size: string, color: string): number => {
+  if (!p.variants || p.variants.length === 0) return p.stock;
+  const v = p.variants.find((x) => x.size === size && x.color === color);
+  return v ? v.stock : 0;
+};
+export const isVariantAvailable = (p: Product, size: string, color: string) =>
+  getVariantStock(p, size, color) > 0;
+export const sizeHasStock = (p: Product, size: string): boolean => {
+  if (!p.variants || p.variants.length === 0) return p.stock > 0;
+  return p.variants.some((v) => v.size === size && v.stock > 0);
+};
+export const colorHasStock = (p: Product, color: string): boolean => {
+  if (!p.variants || p.variants.length === 0) return p.stock > 0;
+  return p.variants.some((v) => v.color === color && v.stock > 0);
+};
+
+// --- Applied coupon (persists across cart/checkout) ---
+export const getAppliedCoupon = (): string | null => read(KEYS.appliedCoupon, null);
+export const setAppliedCoupon = (code: string | null) => write(KEYS.appliedCoupon, code);
+export const useAppliedCoupon = () => useStore(getAppliedCoupon);
 
 // Re-export for type-only clarity
 export const _noop = () => useCallback(() => {}, []);

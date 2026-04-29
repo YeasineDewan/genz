@@ -1,8 +1,11 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice, trackFunnel } from "@/lib/store";
-import { useEffect } from "react";
-import { useState } from "react";
+import { CouponInput } from "@/components/CouponInput";
+import {
+  useCart, useProducts, useUser, cartTotal, clearCart, placeOrder, formatPrice,
+  trackFunnel, useAppliedCoupon, validateCoupon, setAppliedCoupon,
+} from "@/lib/store";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/checkout")({
@@ -17,6 +20,10 @@ function Checkout() {
   const navigate = useNavigate();
   const total = cartTotal(cart, products);
   const ship = total >= 80 || total === 0 ? 0 : 8;
+  const applied = useAppliedCoupon();
+  const couponResult = applied ? validateCoupon(applied, total) : null;
+  const discount = couponResult?.ok ? couponResult.discount : 0;
+  const grand = Math.max(0, total + ship - discount);
   const [form, setForm] = useState({
     name: user?.name ?? "",
     email: user?.email ?? "",
@@ -45,10 +52,15 @@ function Checkout() {
       const order = placeOrder({
         userId: user?.id ?? "guest",
         items: cart,
-        total: total + ship,
+        subtotal: total,
+        shippingFee: ship,
+        discount,
+        couponCode: discount > 0 && couponResult?.ok ? couponResult.coupon.code : undefined,
+        total: grand,
         shipping: { name: form.name, address: form.address, city: form.city, zip: form.zip, country: form.country },
       });
       clearCart();
+      setAppliedCoupon(null);
       setLoading(false);
       toast.success("Order placed! 🎉");
       navigate({ to: "/order/$id", params: { id: order.id } });
@@ -105,13 +117,19 @@ function Checkout() {
                 );
               })}
             </div>
+            <CouponInput subtotal={total}/>
             <div className="border-t-2 border-ink pt-3 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(total)}</span></div>
+              {discount > 0 && (
+                <div className="flex justify-between text-pop-pink font-bold">
+                  <span>Discount ({applied})</span><span>−{formatPrice(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between"><span>Shipping</span><span>{ship ? formatPrice(ship) : "FREE"}</span></div>
-              <div className="flex justify-between font-display text-2xl pt-2"><span>Total</span><span>{formatPrice(total+ship)}</span></div>
+              <div className="flex justify-between font-display text-2xl pt-2"><span>Total</span><span>{formatPrice(grand)}</span></div>
             </div>
             <button disabled={loading} type="submit" className="btn-pop w-full justify-center disabled:opacity-60">
-              {loading ? "Processing..." : `Pay ${formatPrice(total+ship)}`}
+              {loading ? "Processing..." : `Pay ${formatPrice(grand)}`}
             </button>
           </aside>
         </form>
