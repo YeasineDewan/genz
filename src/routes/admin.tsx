@@ -824,6 +824,121 @@ function Inventory() {
   );
 }
 
+/* ───────────── Variant matrix ───────────── */
+
+function VariantMatrix({
+  product, onChange,
+}: { product: Product; onChange: (variants: VariantStock[] | undefined, total: number) => void }) {
+  const enabled = !!(product.variants && product.variants.length > 0);
+  const sizes = product.sizes;
+  const colors = product.colors;
+
+  const enable = () => {
+    const variants: VariantStock[] = [];
+    sizes.forEach((s) => colors.forEach((c) => variants.push({ size: s, color: c, stock: 0 })));
+    onChange(variants, 0);
+  };
+  const disable = () => onChange(undefined, product.stock);
+
+  // Sync matrix with current sizes/colors (preserve stock for existing combos)
+  const syncedVariants = useMemo<VariantStock[]>(() => {
+    if (!enabled) return [];
+    const map = new Map((product.variants ?? []).map((v) => [`${v.size}__${v.color}`, v.stock]));
+    const out: VariantStock[] = [];
+    sizes.forEach((s) => colors.forEach((c) => {
+      out.push({ size: s, color: c, stock: map.get(`${s}__${c}`) ?? 0 });
+    }));
+    return out;
+  }, [enabled, product.variants, sizes, colors]);
+
+  // If matrix dimensions changed, push the synced version up
+  useEffect(() => {
+    if (!enabled) return;
+    const cur = product.variants ?? [];
+    if (cur.length !== syncedVariants.length) {
+      const total = syncedVariants.reduce((s, v) => s + v.stock, 0);
+      onChange(syncedVariants, total);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncedVariants.length, enabled]);
+
+  const updateCell = (size: string, color: string, stock: number) => {
+    const next = (product.variants ?? []).map((v) =>
+      v.size === size && v.color === color ? { ...v, stock: Math.max(0, stock) } : v,
+    );
+    const total = next.reduce((s, v) => s + v.stock, 0);
+    onChange(next, total);
+  };
+
+  const fillAll = (n: number) => {
+    const next = (product.variants ?? []).map((v) => ({ ...v, stock: n }));
+    onChange(next, next.reduce((s, v) => s + v.stock, 0));
+  };
+
+  const total = (product.variants ?? []).reduce((s, v) => s + v.stock, 0);
+
+  return (
+    <div className="border-[3px] border-ink rounded-xl bg-pop-yellow/30 p-3 space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <div className="font-bold text-sm uppercase">Per-variant stock</div>
+          <div className="text-xs text-muted-foreground">Track inventory by size × color</div>
+        </div>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input type="checkbox" checked={enabled} onChange={(e) => e.target.checked ? enable() : disable()} className="h-4 w-4"/>
+          Enable
+        </label>
+      </div>
+
+      {enabled && (
+        <>
+          {sizes.length === 0 || colors.length === 0 ? (
+            <p className="text-xs text-destructive">Add at least one size and one color above.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-left p-1 text-xs uppercase font-bold">Size \ Color</th>
+                      {colors.map((c) => <th key={c} className="p-1 text-xs uppercase font-bold">{c}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sizes.map((s) => (
+                      <tr key={s}>
+                        <td className="p-1 font-bold text-xs uppercase">{s}</td>
+                        {colors.map((c) => {
+                          const v = (product.variants ?? []).find((x) => x.size === s && x.color === c);
+                          return (
+                            <td key={c} className="p-1">
+                              <input type="number" min="0" value={v?.stock ?? 0}
+                                onChange={(e) => updateCell(s, c, +e.target.value)}
+                                className={`w-full text-center border-2 border-ink rounded-md py-1 ${(v?.stock ?? 0) === 0 ? "bg-destructive/10" : "bg-white"}`}/>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="font-bold">Total: {total} units</span>
+                <div className="flex gap-1">
+                  {[0, 5, 10, 25].map((n) => (
+                    <button key={n} type="button" onClick={() => fillAll(n)} className="chip text-xs">Set all to {n}</button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ───────────── Coupons ───────────── */
 
 function emptyCoupon(): Coupon {
