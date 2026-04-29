@@ -76,27 +76,42 @@ function ProductPage() {
           <p className="mt-5 text-muted-foreground">{product.description}</p>
 
           <div className="mt-6">
-            <div className="font-bold text-sm mb-2 uppercase">Color</div>
-            <div className="flex gap-2">
-              {product.colors.map((c) => (
-                <button key={c} onClick={() => setColor(c)}
-                  className={`h-10 w-10 rounded-full border-[3px] border-ink ${colorMap[c] ?? "bg-muted"} ${color === c ? "ring-4 ring-pop-yellow ring-offset-2 ring-offset-paper" : ""}`}
-                  aria-label={c}
-                />
-              ))}
+            <div className="font-bold text-sm mb-2 uppercase">Color {hasVariants && <span className="text-muted-foreground font-normal">— picking shows live stock</span>}</div>
+            <div className="flex gap-2 flex-wrap">
+              {product.colors.map((c) => {
+                const avail = colorHasStock(product, c);
+                return (
+                  <button key={c} onClick={() => setColor(c)} disabled={!avail}
+                    title={avail ? c : `${c} — sold out`}
+                    className={`relative h-10 w-10 rounded-full border-[3px] border-ink ${colorMap[c] ?? "bg-muted"} ${color === c ? "ring-4 ring-pop-yellow ring-offset-2 ring-offset-paper" : ""} ${!avail ? "opacity-40 cursor-not-allowed" : ""}`}
+                    aria-label={c}
+                  >
+                    {!avail && <span className="absolute inset-0 grid place-items-center text-ink font-bold">×</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="mt-6">
             <div className="font-bold text-sm mb-2 uppercase">Size</div>
             <div className="flex flex-wrap gap-2">
-              {product.sizes.map((s) => (
-                <button key={s} onClick={() => setSize(s)}
-                  className={`chip min-w-12 justify-center ${size === s ? "bg-ink text-paper" : ""}`}>
-                  {s}
-                </button>
-              ))}
+              {product.sizes.map((s) => {
+                const avail = hasVariants
+                  ? getVariantStock(product, s, color) > 0
+                  : sizeHasStock(product, s);
+                return (
+                  <button key={s} onClick={() => setSize(s)} disabled={!avail}
+                    title={avail ? s : `${s} — sold out in ${color}`}
+                    className={`chip min-w-12 justify-center ${size === s ? "bg-ink text-paper" : ""} ${!avail ? "opacity-40 line-through cursor-not-allowed" : ""}`}>
+                    {s}
+                  </button>
+                );
+              })}
             </div>
+            {hasVariants && !outOfStock && variantStock <= 5 && (
+              <p className="text-xs font-bold text-pop-pink mt-2">Only {variantStock} left in {size} / {color}</p>
+            )}
           </div>
 
           <div className="mt-6 flex items-center gap-3">
@@ -105,8 +120,8 @@ function ProductPage() {
               <span className="px-3 font-bold">{qty}</span>
               <button onClick={() => setQty((q) => q + 1)} className="px-4 py-2 font-bold">+</button>
             </div>
-            <button onClick={handleAdd} className="btn-pop flex-1 justify-center" disabled={product.stock === 0}>
-              <ShoppingBag size={18}/> {product.stock === 0 ? "Sold out" : "Add to bag"}
+            <button onClick={handleAdd} className="btn-pop flex-1 justify-center" disabled={outOfStock}>
+              <ShoppingBag size={18}/> {outOfStock ? "Sold out" : "Add to bag"}
             </button>
             <WishlistButton productId={product.id}/>
           </div>
