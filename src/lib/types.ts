@@ -56,6 +56,10 @@ export interface Order {
   userId: string;
   items: CartItem[];
   total: number;
+  subtotal?: number;
+  shippingFee?: number;
+  discount?: number;
+  couponCode?: string;
   status: OrderStatus;
   createdAt: number;
   shipping: { name: string; address: string; city: string; zip: string; country: string };
