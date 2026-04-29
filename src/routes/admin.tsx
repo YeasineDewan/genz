@@ -34,20 +34,6 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "reviews", label: "Reviews", Icon: MessageSquare },
 ];
 
-export const Route = createFileRoute("/admin")({
-  head: () => ({ meta: [{ title: "Admin Dashboard — GenZ" }] }),
-  component: Admin,
-});
-
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory";
-
-const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
-  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { key: "products", label: "Products", Icon: Package },
-  { key: "categories", label: "Categories", Icon: Tag },
-  { key: "orders", label: "Orders", Icon: Truck },
-  { key: "inventory", label: "Inventory", Icon: Boxes },
-];
 
 const ORDER_STATUSES: OrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"];
 
