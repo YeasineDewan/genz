@@ -461,5 +461,27 @@ export const useEnsureSeeded = () => {
 export const formatPrice = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
+// --- Variant stock helpers ---
+export const getVariantStock = (p: Product, size: string, color: string): number => {
+  if (!p.variants || p.variants.length === 0) return p.stock;
+  const v = p.variants.find((x) => x.size === size && x.color === color);
+  return v ? v.stock : 0;
+};
+export const isVariantAvailable = (p: Product, size: string, color: string) =>
+  getVariantStock(p, size, color) > 0;
+export const sizeHasStock = (p: Product, size: string): boolean => {
+  if (!p.variants || p.variants.length === 0) return p.stock > 0;
+  return p.variants.some((v) => v.size === size && v.stock > 0);
+};
+export const colorHasStock = (p: Product, color: string): boolean => {
+  if (!p.variants || p.variants.length === 0) return p.stock > 0;
+  return p.variants.some((v) => v.color === color && v.stock > 0);
+};
+
+// --- Applied coupon (persists across cart/checkout) ---
+export const getAppliedCoupon = (): string | null => read(KEYS.appliedCoupon, null);
+export const setAppliedCoupon = (code: string | null) => write(KEYS.appliedCoupon, code);
+export const useAppliedCoupon = () => useStore(getAppliedCoupon);
+
 // Re-export for type-only clarity
 export const _noop = () => useCallback(() => {}, []);
