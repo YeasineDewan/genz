@@ -822,6 +822,250 @@ function Inventory() {
   );
 }
 
+/* ───────────── Coupons ───────────── */
+
+function emptyCoupon(): Coupon {
+  return {
+    id: crypto.randomUUID(), code: "", type: "percent", value: 10,
+    uses: 0, active: true,
+  };
+}
+
+function Coupons() {
+  const coupons = useCoupons();
+  const [editing, setEditing] = useState<Coupon | null>(null);
+  const sorted = useMemo(() => [...coupons].sort((a, b) => Number(b.active) - Number(a.active)), [coupons]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-3xl">Promo codes</h2>
+          <p className="text-sm text-muted-foreground">Reward your loudest fans. Percent or fixed-amount discounts.</p>
+        </div>
+        <button onClick={() => setEditing(emptyCoupon())} className="btn-pop"><Plus size={16}/> New code</button>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="sticker rounded-2xl bg-white p-12 text-center">
+          <Ticket className="mx-auto mb-3" size={36}/>
+          <p className="font-bold mb-1">No coupons yet</p>
+          <p className="text-sm text-muted-foreground">Create your first promo code to drive conversions.</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sorted.map((c) => {
+            const expired = c.expiresAt && c.expiresAt < Date.now();
+            const exhausted = c.maxUses && c.uses >= c.maxUses;
+            const live = c.active && !expired && !exhausted;
+            return (
+              <div key={c.id} className={`sticker rounded-2xl p-5 ${live ? "bg-pop-yellow" : "bg-white"}`}>
+                <div className="flex items-start justify-between">
+                  <div className="min-w-0">
+                    <div className="font-mono font-display text-3xl tracking-wider truncate">{c.code}</div>
+                    <div className="text-sm font-bold mt-1">
+                      {c.type === "percent" ? `${c.value}% off` : `${formatPrice(c.value)} off`}
+                      {c.minSubtotal ? ` · min ${formatPrice(c.minSubtotal)}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className={`chip text-xs ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : "bg-muted"}`}>
+                      {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : "Inactive"}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
+                  <div>Uses: <span className="font-bold text-ink">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
+                  {c.expiresAt && <div>Expires: <span className="font-bold text-ink">{new Date(c.expiresAt).toLocaleDateString()}</span></div>}
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/> Edit</button>
+                  <button onClick={() => navigator.clipboard.writeText(c.code).then(() => toast.success("Copied"))} className="chip">Copy</button>
+                  <button onClick={() => { if (confirm(`Delete "${c.code}"?`)) { deleteCoupon(c.id); toast.success("Deleted"); } }}
+                    className="chip bg-destructive text-white ml-auto"><Trash2 size={12}/></button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {editing && <CouponDrawer coupon={editing} onClose={() => setEditing(null)}/>}
+    </div>
+  );
+}
+
+function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void }) {
+  const [c, setC] = useState<Coupon>(coupon);
+  const [expires, setExpires] = useState<string>(
+    coupon.expiresAt ? new Date(coupon.expiresAt).toISOString().slice(0, 10) : "",
+  );
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = c.code.trim().toUpperCase();
+    if (!code) return toast.error("Code required");
+    if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return toast.error("Code must be 3–20 letters/digits");
+    if (!(c.value > 0)) return toast.error("Value must be > 0");
+    if (c.type === "percent" && c.value > 100) return toast.error("Percent can't exceed 100");
+    saveCoupon({
+      ...c,
+      code,
+      expiresAt: expires ? new Date(expires).getTime() : undefined,
+      minSubtotal: c.minSubtotal && c.minSubtotal > 0 ? c.minSubtotal : undefined,
+      maxUses: c.maxUses && c.maxUses > 0 ? c.maxUses : undefined,
+    });
+    toast.success("Saved");
+    onClose();
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-ink/40" onClick={onClose}/>
+      <form onSubmit={save} className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between">
+          <h3 className="text-2xl">{coupon.code ? "Edit coupon" : "New coupon"}</h3>
+          <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white text-ink"><X size={16}/></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <Field label="Code">
+            <input value={c.code} onChange={(e) => setC({ ...c, code: e.target.value.toUpperCase() })}
+              className="inp font-mono uppercase tracking-wider" maxLength={20} placeholder="SUMMER25"/>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Type">
+              <select value={c.type} onChange={(e) => setC({ ...c, type: e.target.value as "percent" | "fixed" })} className="inp">
+                <option value="percent">% Percent</option>
+                <option value="fixed">$ Fixed</option>
+              </select>
+            </Field>
+            <Field label={c.type === "percent" ? "Value (%)" : "Value ($)"}>
+              <input type="number" min="0" step="0.01" value={c.value}
+                onChange={(e) => setC({ ...c, value: +e.target.value })} className="inp"/>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Min subtotal ($)">
+              <input type="number" min="0" step="0.01" value={c.minSubtotal ?? ""}
+                onChange={(e) => setC({ ...c, minSubtotal: e.target.value ? +e.target.value : undefined })}
+                className="inp" placeholder="optional"/>
+            </Field>
+            <Field label="Max uses">
+              <input type="number" min="0" value={c.maxUses ?? ""}
+                onChange={(e) => setC({ ...c, maxUses: e.target.value ? +e.target.value : undefined })}
+                className="inp" placeholder="unlimited"/>
+            </Field>
+          </div>
+          <Field label="Expires (optional)">
+            <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+          </Field>
+          <label className="flex items-center gap-2 mt-2 font-bold text-sm">
+            <input type="checkbox" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} className="h-4 w-4"/>
+            Active
+          </label>
+          <button className="btn-pop w-full justify-center mt-3">Save coupon</button>
+        </div>
+        <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
+      </form>
+    </div>
+  );
+}
+
+/* ───────────── Reviews moderation ───────────── */
+
+function ReviewsModeration() {
+  const reviews = useReviews();
+  const products = useProducts();
+  const [filter, setFilter] = useState<ReviewStatus | "all" | "reported">("all");
+
+  const counts = useMemo(() => ({
+    all: reviews.length,
+    approved: reviews.filter((r) => (r.status ?? "approved") === "approved").length,
+    pending: reviews.filter((r) => r.status === "pending").length,
+    hidden: reviews.filter((r) => r.status === "hidden").length,
+    reported: reviews.filter((r) => (r.reports ?? 0) > 0).length,
+  }), [reviews]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return reviews;
+    if (filter === "reported") return reviews.filter((r) => (r.reports ?? 0) > 0);
+    return reviews.filter((r) => (r.status ?? "approved") === filter);
+  }, [reviews, filter]);
+
+  const FilterChip = ({ k, label }: { k: typeof filter; label: string }) => (
+    <button onClick={() => setFilter(k)} className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
+      {label} ({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})
+    </button>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-3xl">Review moderation</h2>
+        <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <FilterChip k="all" label="All"/>
+        <FilterChip k="approved" label="Approved"/>
+        <FilterChip k="pending" label="Pending"/>
+        <FilterChip k="hidden" label="Hidden"/>
+        <FilterChip k="reported" label="Reported"/>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews here.</div>
+      ) : (
+        <ul className="space-y-3">
+          {filtered.map((r) => {
+            const p = products.find((x) => x.id === r.productId);
+            const status = r.status ?? "approved";
+            const reports = r.reports ?? 0;
+            return (
+              <li key={r.id} className="sticker rounded-2xl bg-white p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    {p && <img src={p.image} alt="" className="h-12 w-12 rounded border-2 border-ink object-cover shrink-0"/>}
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{p?.name ?? "(deleted)"}</div>
+                      <div className="font-bold flex items-center gap-2 flex-wrap">
+                        <span>{r.title}</span>
+                        <span className="text-pop-pink">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                      </div>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{r.body}</p>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        by {r.userName} · {new Date(r.at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
+                      {status}
+                    </span>
+                    {reports > 0 && (
+                      <span className="chip bg-destructive text-white text-xs"><Flag size={10}/> {reports}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                  {status !== "approved" && (
+                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
+                  )}
+                  {status !== "hidden" && (
+                    <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
+                  )}
+                  {status === "hidden" && (
+                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip"><Eye size={12}/> Show</button>
+                  )}
+                  <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
+                    className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <label className="block">
