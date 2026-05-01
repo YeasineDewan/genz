@@ -1224,6 +1224,11 @@ function ReviewsModeration() {
   const reviews = useReviews();
   const products = useProducts();
   const [filter, setFilter] = useState<ReviewStatus | "all" | "reported">("all");
+  const [q, setQ] = useState("");
+  const [productFilter, setProductFilter] = useState<string>("");
+  const [ratingFilter, setRatingFilter] = useState<number | "all">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const counts = useMemo(() => ({
     all: reviews.length,
@@ -1233,83 +1238,204 @@ function ReviewsModeration() {
     reported: reviews.filter((r) => (r.reports ?? 0) > 0).length,
   }), [reviews]);
 
+  const avgRating = useMemo(() => {
+    if (reviews.length === 0) return 0;
+    return reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  }, [reviews]);
+
   const filtered = useMemo(() => {
-    if (filter === "all") return reviews;
-    if (filter === "reported") return reviews.filter((r) => (r.reports ?? 0) > 0);
-    return reviews.filter((r) => (r.status ?? "approved") === filter);
-  }, [reviews, filter]);
+    let list = reviews;
+    if (filter === "reported") list = list.filter((r) => (r.reports ?? 0) > 0);
+    else if (filter !== "all") list = list.filter((r) => (r.status ?? "approved") === filter);
+    if (productFilter) list = list.filter((r) => r.productId === productFilter);
+    if (ratingFilter !== "all") list = list.filter((r) => r.rating === ratingFilter);
+    const term = q.trim().toLowerCase();
+    if (term) {
+      list = list.filter((r) =>
+        r.title.toLowerCase().includes(term) ||
+        r.body.toLowerCase().includes(term) ||
+        r.userName.toLowerCase().includes(term),
+      );
+    }
+    return [...list].sort((a, b) => b.at - a.at);
+  }, [reviews, filter, productFilter, ratingFilter, q]);
+
+  const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map((r) => r.id)));
+  };
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const toggleExpand = (id: string) => {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setExpanded(next);
+  };
+
+  const bulkUpdate = (action: "approve" | "hide" | "delete") => {
+    if (selected.size === 0) return;
+    const ids = [...selected];
+    if (action === "delete") {
+      if (!confirm(`Delete ${ids.length} review${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+      ids.forEach((id) => deleteReview(id));
+      toast.success(`Deleted ${ids.length}`);
+    } else {
+      const status: ReviewStatus = action === "approve" ? "approved" : "hidden";
+      ids.forEach((id) => setReviewStatus(id, status));
+      toast.success(`${action === "approve" ? "Approved" : "Hidden"} ${ids.length}`);
+    }
+    setSelected(new Set());
+  };
 
   const FilterChip = ({ k, label }: { k: typeof filter; label: string }) => (
-    <button onClick={() => setFilter(k)} className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
-      {label} ({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})
+    <button onClick={() => { setFilter(k); setSelected(new Set()); }}
+      className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
+      {label} <span className="opacity-70 ml-1">({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})</span>
     </button>
   );
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-3xl">Review moderation</h2>
-        <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <FilterChip k="all" label="All"/>
-        <FilterChip k="approved" label="Approved"/>
-        <FilterChip k="pending" label="Pending"/>
-        <FilterChip k="hidden" label="Hidden"/>
-        <FilterChip k="reported" label="Reported"/>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-3xl">Review moderation</h2>
+          <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
+        </div>
       </div>
 
+      {/* Quick stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Total reviews" value={String(counts.all)} Icon={MessageSquare} bg="bg-pop-cyan"/>
+        <Stat label="Avg rating" value={avgRating.toFixed(1) + " ★"} Icon={Check} bg="bg-pop-yellow"/>
+        <Stat label="Awaiting review" value={String(counts.pending)} Icon={AlertTriangle} bg="bg-pop-orange" warn={counts.pending > 0}/>
+        <Stat label="Reported" value={String(counts.reported)} Icon={Flag} bg="bg-destructive" fg="text-white" warn={counts.reported > 0}/>
+      </div>
+
+      {/* Filters */}
+      <div className="sticker rounded-2xl bg-white p-4 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <FilterChip k="all" label="All"/>
+          <FilterChip k="pending" label="Pending"/>
+          <FilterChip k="approved" label="Approved"/>
+          <FilterChip k="hidden" label="Hidden"/>
+          <FilterChip k="reported" label="Reported"/>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, body, author..."
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none"/>
+          <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none">
+            <option value="">All products</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value === "all" ? "all" : +e.target.value)}
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none">
+            <option value="all">All ratings</option>
+            {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} star{n === 1 ? "" : "s"}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticker rounded-2xl bg-pop-pink text-white p-3 flex items-center gap-2 flex-wrap sticky top-32 z-20">
+          <span className="font-bold">{selected.size} selected</span>
+          <div className="flex-1"/>
+          <button onClick={() => bulkUpdate("approve")} className="chip bg-pop-cyan text-ink"><Check size={12}/> Approve</button>
+          <button onClick={() => bulkUpdate("hide")} className="chip bg-white text-ink"><EyeOff size={12}/> Hide</button>
+          <button onClick={() => bulkUpdate("delete")} className="chip bg-destructive text-white border-2 border-white"><Trash2 size={12}/> Delete</button>
+          <button onClick={() => setSelected(new Set())} className="chip bg-white text-ink"><X size={12}/></button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
-        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews here.</div>
+        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews match your filters.</div>
       ) : (
-        <ul className="space-y-3">
-          {filtered.map((r) => {
-            const p = products.find((x) => x.id === r.productId);
-            const status = r.status ?? "approved";
-            const reports = r.reports ?? 0;
-            return (
-              <li key={r.id} className="sticker rounded-2xl bg-white p-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    {p && <img src={p.image} alt="" className="h-12 w-12 rounded border-2 border-ink object-cover shrink-0"/>}
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">{p?.name ?? "(deleted)"}</div>
-                      <div className="font-bold flex items-center gap-2 flex-wrap">
-                        <span>{r.title}</span>
-                        <span className="text-pop-pink">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
-                      </div>
-                      <p className="text-sm mt-1 whitespace-pre-wrap">{r.body}</p>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        by {r.userName} · {new Date(r.at).toLocaleDateString()}
+        <>
+          <div className="flex items-center gap-2 px-1">
+            <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4"/>
+              Select all on page ({filtered.length})
+            </label>
+          </div>
+          <ul className="space-y-3">
+            {filtered.map((r) => {
+              const p = products.find((x) => x.id === r.productId);
+              const status = r.status ?? "approved";
+              const reports = r.reports ?? 0;
+              const isExpanded = expanded.has(r.id);
+              const longBody = r.body.length > 200;
+              const displayBody = isExpanded || !longBody ? r.body : r.body.slice(0, 200) + "…";
+              const isSelected = selected.has(r.id);
+              return (
+                <li key={r.id}
+                  className={`sticker rounded-2xl p-4 transition ${isSelected ? "bg-pop-yellow/40 ring-2 ring-pop-pink" : "bg-white"} ${status === "pending" ? "border-l-8 border-l-pop-orange" : status === "hidden" ? "opacity-70" : ""}`}>
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)}
+                      className="h-4 w-4 mt-2 shrink-0"/>
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {p ? (
+                        <Link to="/product/$slug" params={{ slug: p.slug }} className="shrink-0">
+                          <img src={p.image} alt="" className="h-14 w-14 rounded border-2 border-ink object-cover"/>
+                        </Link>
+                      ) : (
+                        <div className="h-14 w-14 rounded border-2 border-ink bg-muted shrink-0 grid place-items-center text-xs">N/A</div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-muted-foreground truncate">{p?.name ?? "(deleted product)"}</div>
+                        <div className="font-bold flex items-center gap-2 flex-wrap">
+                          <span>{r.title}</span>
+                          <span className="text-pop-pink text-sm tracking-tighter">{"★".repeat(r.rating)}<span className="text-ink/20">{"★".repeat(5 - r.rating)}</span></span>
+                        </div>
+                        <p className="text-sm mt-1 whitespace-pre-wrap break-words">{displayBody}</p>
+                        {longBody && (
+                          <button onClick={() => toggleExpand(r.id)} className="text-xs font-bold text-pop-pink mt-1 hover:underline">
+                            {isExpanded ? "Show less" : "Show more"}
+                          </button>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-ink">{r.userName}</span>
+                          <span>·</span>
+                          <span title={new Date(r.at).toLocaleString()}>{new Date(r.at).toLocaleDateString()}</span>
+                        </div>
                       </div>
                     </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
+                        {status}
+                      </span>
+                      {reports > 0 && (
+                        <span className="chip bg-destructive text-white text-xs" title={`${reports} user report${reports === 1 ? "" : "s"}`}>
+                          <Flag size={10}/> {reports}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
-                      {status}
-                    </span>
-                    {reports > 0 && (
-                      <span className="chip bg-destructive text-white text-xs"><Flag size={10}/> {reports}</span>
+                  <div className="mt-3 flex flex-wrap gap-2 justify-end pt-2 border-t border-ink/10">
+                    {status !== "approved" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
                     )}
+                    {status !== "hidden" && (
+                      <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
+                    )}
+                    {status === "hidden" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip bg-pop-cyan"><Eye size={12}/> Restore</button>
+                    )}
+                    {status === "pending" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-yellow"><Check size={12}/> Quick approve</button>
+                    )}
+                    <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
+                      className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
                   </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                  {status !== "approved" && (
-                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
-                  )}
-                  {status !== "hidden" && (
-                    <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
-                  )}
-                  {status === "hidden" && (
-                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip"><Eye size={12}/> Show</button>
-                  )}
-                  <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
-                    className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );
