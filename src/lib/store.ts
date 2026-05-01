@@ -211,7 +211,15 @@ export const placeOrder = (
   write(KEYS.products, products);
   if (o.couponCode) {
     const c = findCoupon(o.couponCode);
-    if (c) consumeCoupon(c.id);
+    if (c) {
+      consumeCoupon(c.id, {
+        at: now,
+        orderId: order.id,
+        userId: o.userId,
+        discount: o.discount ?? 0,
+        subtotal: o.subtotal ?? o.total,
+      });
+    }
   }
   trackFunnel("order_completed");
   return order;
