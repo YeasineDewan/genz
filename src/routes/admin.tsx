@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import {
   useProducts, useUser, saveProduct, deleteProduct, formatPrice,
