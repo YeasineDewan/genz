@@ -944,7 +944,7 @@ function VariantMatrix({
 function emptyCoupon(): Coupon {
   return {
     id: crypto.randomUUID(), code: "", type: "percent", value: 10,
-    uses: 0, active: true,
+    uses: 0, active: true, redemptions: [], createdAt: Date.now(),
   };
 }
 
