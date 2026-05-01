@@ -1112,6 +1112,9 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
   const [expires, setExpires] = useState<string>(
     coupon.expiresAt ? new Date(coupon.expiresAt).toISOString().slice(0, 10) : "",
   );
+  const [starts, setStarts] = useState<string>(
+    coupon.startsAt ? new Date(coupon.startsAt).toISOString().slice(0, 10) : "",
+  );
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     const code = c.code.trim().toUpperCase();
@@ -1119,12 +1122,18 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
     if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return toast.error("Code must be 3–20 letters/digits");
     if (!(c.value > 0)) return toast.error("Value must be > 0");
     if (c.type === "percent" && c.value > 100) return toast.error("Percent can't exceed 100");
+    const startsAt = starts ? new Date(starts).getTime() : undefined;
+    const expiresAt = expires ? new Date(expires).getTime() : undefined;
+    if (startsAt && expiresAt && startsAt >= expiresAt) return toast.error("Start date must be before expiry");
     saveCoupon({
       ...c,
       code,
-      expiresAt: expires ? new Date(expires).getTime() : undefined,
+      startsAt,
+      expiresAt,
       minSubtotal: c.minSubtotal && c.minSubtotal > 0 ? c.minSubtotal : undefined,
       maxUses: c.maxUses && c.maxUses > 0 ? c.maxUses : undefined,
+      maxPerUser: c.maxPerUser && c.maxPerUser > 0 ? c.maxPerUser : undefined,
+      description: c.description?.trim() || undefined,
     });
     toast.success("Saved");
     onClose();
@@ -1133,7 +1142,7 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-ink/40" onClick={onClose}/>
       <form onSubmit={save} className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
-        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between sticky top-0 z-10">
           <h3 className="text-2xl">{coupon.code ? "Edit coupon" : "New coupon"}</h3>
           <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white text-ink"><X size={16}/></button>
         </div>
@@ -1141,6 +1150,11 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
           <Field label="Code">
             <input value={c.code} onChange={(e) => setC({ ...c, code: e.target.value.toUpperCase() })}
               className="inp font-mono uppercase tracking-wider" maxLength={20} placeholder="SUMMER25"/>
+            <div className="text-[10px] text-muted-foreground mt-1">3–20 chars · A–Z, 0–9, _, -</div>
+          </Field>
+          <Field label="Description (internal)">
+            <input value={c.description ?? ""} onChange={(e) => setC({ ...c, description: e.target.value })}
+              className="inp" maxLength={80} placeholder="e.g. Summer launch promo"/>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
@@ -1158,26 +1172,51 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
             <Field label="Min subtotal ($)">
               <input type="number" min="0" step="0.01" value={c.minSubtotal ?? ""}
                 onChange={(e) => setC({ ...c, minSubtotal: e.target.value ? +e.target.value : undefined })}
-                className="inp" placeholder="optional"/>
+                className="inp" placeholder="none"/>
             </Field>
-            <Field label="Max uses">
+            <Field label="Max uses (total)">
               <input type="number" min="0" value={c.maxUses ?? ""}
                 onChange={(e) => setC({ ...c, maxUses: e.target.value ? +e.target.value : undefined })}
                 className="inp" placeholder="unlimited"/>
             </Field>
           </div>
-          <Field label="Expires (optional)">
-            <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+          <Field label="Max uses per customer">
+            <input type="number" min="0" value={c.maxPerUser ?? ""}
+              onChange={(e) => setC({ ...c, maxPerUser: e.target.value ? +e.target.value : undefined })}
+              className="inp" placeholder="unlimited"/>
           </Field>
-          <label className="flex items-center gap-2 mt-2 font-bold text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Starts (optional)">
+              <input type="date" value={starts} onChange={(e) => setStarts(e.target.value)} className="inp"/>
+            </Field>
+            <Field label="Expires (optional)">
+              <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
+            <input type="checkbox" checked={c.firstOrderOnly ?? false}
+              onChange={(e) => setC({ ...c, firstOrderOnly: e.target.checked || undefined })} className="h-4 w-4"/>
+            First-order customers only
+          </label>
+          <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
             <input type="checkbox" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} className="h-4 w-4"/>
             Active
           </label>
+          {coupon.uses > 0 && (
+            <div className="text-xs text-muted-foreground border-t-2 border-ink/10 pt-3">
+              Already redeemed <span className="font-bold text-ink">{coupon.uses}</span>×
+              {coupon.redemptions && coupon.redemptions.length > 0 && (
+                <> · total discount <span className="font-bold text-ink">{formatPrice(coupon.redemptions.reduce((s, r) => s + r.discount, 0))}</span></>
+              )}
+            </div>
+          )}
           <button className="btn-pop w-full justify-center mt-3">Save coupon</button>
         </div>
         <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
       </form>
     </div>
+  );
+}
   );
 }
 
