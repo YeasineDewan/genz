@@ -1217,8 +1217,6 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
     </div>
   );
 }
-  );
-}
 
 /* ───────────── Reviews moderation ───────────── */
 
