@@ -36,13 +36,38 @@ function ProductPage() {
   const product = products.find((p) => p.slug === slug);
   if (!product) throw notFound();
 
-  const [size, setSize] = useState(product.sizes[0]);
-  const [color, setColor] = useState(product.colors[0]);
+  const hasVariants = !!(product.variants && product.variants.length > 0);
+
+  // Pick a default size/color combination that's actually in stock when variants exist
+  const initialColor = useMemo(() => {
+    if (!hasVariants) return product.colors[0];
+    return product.colors.find((c) => colorHasStock(product, c)) ?? product.colors[0];
+  }, [product, hasVariants]);
+  const initialSize = useMemo(() => {
+    if (!hasVariants) return product.sizes[0];
+    return product.sizes.find((s) => getVariantStock(product, s, initialColor) > 0) ?? product.sizes[0];
+  }, [product, hasVariants, initialColor]);
+
+  const [size, setSize] = useState(initialSize);
+  const [color, setColor] = useState(initialColor);
   const [qty, setQty] = useState(1);
   const rating = useProductRating(product.id);
   const variantStock = getVariantStock(product, size, color);
-  const hasVariants = !!(product.variants && product.variants.length > 0);
   const outOfStock = hasVariants ? variantStock === 0 : product.stock === 0;
+
+  // When color changes, snap size to a variant that's in stock for that color
+  useEffect(() => {
+    if (!hasVariants) return;
+    if (getVariantStock(product, size, color) === 0) {
+      const next = product.sizes.find((s) => getVariantStock(product, s, color) > 0);
+      if (next && next !== size) setSize(next);
+    }
+  }, [color, hasVariants, product, size]);
+
+  // Clamp qty to available variant stock
+  useEffect(() => {
+    if (variantStock > 0 && qty > variantStock) setQty(variantStock);
+  }, [variantStock, qty]);
 
   useEffect(() => { trackRecent(product.id); }, [product.id]);
 
@@ -55,8 +80,14 @@ function ProductPage() {
     if (outOfStock) { toast.error("That size/color is sold out"); return; }
     if (hasVariants && qty > variantStock) { toast.error(`Only ${variantStock} available in ${size}/${color}`); return; }
     addToCart({ productId: product.id, size, color, qty });
-    toast.success(`${product.name} added to bag`, { description: `${size} · ${color}` });
+    toast.success(`${product.name} added to bag`, { description: `${size} · ${color} · qty ${qty}` });
   };
+
+  const stockTone =
+    variantStock === 0 ? { label: "Sold out", cls: "bg-destructive text-white" }
+    : variantStock <= 3 ? { label: `Only ${variantStock} left`, cls: "bg-destructive/90 text-white animate-pulse" }
+    : variantStock <= 10 ? { label: `Low stock — ${variantStock} left`, cls: "bg-pop-orange" }
+    : { label: "In stock", cls: "bg-pop-cyan" };
 
   const related = products.filter((p) => p.id !== product.id && p.category === product.category).slice(0, 4);
 
@@ -66,9 +97,12 @@ function ProductPage() {
         <ProductGallery images={product.images && product.images.length > 0 ? product.images : [product.image]} alt={product.name} />
 
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-3 flex-wrap">
             {product.badge && <span className="chip bg-pop-pink text-white">{product.badge}</span>}
             <span className="chip">{product.category}</span>
+            {hasVariants && (
+              <span className={`chip text-xs ${stockTone.cls}`}>{stockTone.label}</span>
+            )}
           </div>
           <h1 className="text-5xl">{product.name}</h1>
           <div className="mt-2"><Stars value={rating.avg} size={16} count={rating.count}/></div>
@@ -76,17 +110,24 @@ function ProductPage() {
           <p className="mt-5 text-muted-foreground">{product.description}</p>
 
           <div className="mt-6">
-            <div className="font-bold text-sm mb-2 uppercase">Color {hasVariants && <span className="text-muted-foreground font-normal">— picking shows live stock</span>}</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-bold text-sm uppercase">Color <span className="text-muted-foreground font-normal normal-case">— {color}</span></div>
+              {hasVariants && <span className="text-[10px] text-muted-foreground uppercase font-bold">live stock</span>}
+            </div>
             <div className="flex gap-2 flex-wrap">
               {product.colors.map((c) => {
                 const avail = colorHasStock(product, c);
                 return (
                   <button key={c} onClick={() => setColor(c)} disabled={!avail}
                     title={avail ? c : `${c} — sold out`}
-                    className={`relative h-10 w-10 rounded-full border-[3px] border-ink ${colorMap[c] ?? "bg-muted"} ${color === c ? "ring-4 ring-pop-yellow ring-offset-2 ring-offset-paper" : ""} ${!avail ? "opacity-40 cursor-not-allowed" : ""}`}
+                    className={`relative h-10 w-10 rounded-full border-[3px] border-ink ${colorMap[c] ?? "bg-muted"} transition-transform ${color === c ? "ring-4 ring-pop-yellow ring-offset-2 ring-offset-paper scale-110" : "hover:scale-105"} ${!avail ? "opacity-40 cursor-not-allowed" : ""}`}
                     aria-label={c}
                   >
-                    {!avail && <span className="absolute inset-0 grid place-items-center text-ink font-bold">×</span>}
+                    {!avail && (
+                      <span className="absolute inset-0 grid place-items-center">
+                        <span className="block h-[3px] w-8 bg-ink rotate-45 rounded-full"/>
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -94,23 +135,34 @@ function ProductPage() {
           </div>
 
           <div className="mt-6">
-            <div className="font-bold text-sm mb-2 uppercase">Size</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-bold text-sm uppercase">Size <span className="text-muted-foreground font-normal normal-case">— {size}</span></div>
+              <Link to="/shop" className="text-xs underline text-muted-foreground hover:text-ink">Size guide</Link>
+            </div>
             <div className="flex flex-wrap gap-2">
               {product.sizes.map((s) => {
-                const avail = hasVariants
-                  ? getVariantStock(product, s, color) > 0
-                  : sizeHasStock(product, s);
+                const stock = hasVariants ? getVariantStock(product, s, color) : (sizeHasStock(product, s) ? Infinity : 0);
+                const avail = stock > 0;
+                const low = hasVariants && avail && stock <= 3;
                 return (
                   <button key={s} onClick={() => setSize(s)} disabled={!avail}
-                    title={avail ? s : `${s} — sold out in ${color}`}
-                    className={`chip min-w-12 justify-center ${size === s ? "bg-ink text-paper" : ""} ${!avail ? "opacity-40 line-through cursor-not-allowed" : ""}`}>
+                    title={avail ? (hasVariants ? `${s} — ${stock} in ${color}` : s) : `${s} — sold out in ${color}`}
+                    className={`relative chip min-w-12 justify-center transition-all ${size === s ? "bg-ink text-paper scale-105" : ""} ${!avail ? "opacity-40 line-through cursor-not-allowed" : "hover:scale-105"}`}>
                     {s}
+                    {low && <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-pop-pink animate-pulse"/>}
                   </button>
                 );
               })}
             </div>
             {hasVariants && !outOfStock && variantStock <= 5 && (
-              <p className="text-xs font-bold text-pop-pink mt-2">Only {variantStock} left in {size} / {color}</p>
+              <p className="text-xs font-bold text-pop-pink mt-2 flex items-center gap-1">
+                🔥 Only <span className="font-display text-base">{variantStock}</span> left in {size} / {color}
+              </p>
+            )}
+            {hasVariants && outOfStock && (
+              <p className="text-xs font-bold text-destructive mt-2">
+                {size} / {color} is sold out — try another combination above.
+              </p>
             )}
           </div>
 
