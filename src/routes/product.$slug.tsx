@@ -168,15 +168,22 @@ function ProductPage() {
 
           <div className="mt-6 flex items-center gap-3">
             <div className="flex items-center border-[3px] border-ink rounded-full bg-white">
-              <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-4 py-2 font-bold">−</button>
-              <span className="px-3 font-bold">{qty}</span>
-              <button onClick={() => setQty((q) => q + 1)} className="px-4 py-2 font-bold">+</button>
+              <button onClick={() => setQty((q) => Math.max(1, q - 1))} disabled={qty <= 1}
+                className="px-4 py-2 font-bold disabled:opacity-30">−</button>
+              <span className="px-3 font-bold tabular-nums min-w-6 text-center">{qty}</span>
+              <button
+                onClick={() => setQty((q) => Math.min(hasVariants ? variantStock : q + 1, q + 1))}
+                disabled={hasVariants && qty >= variantStock}
+                className="px-4 py-2 font-bold disabled:opacity-30">+</button>
             </div>
             <button onClick={handleAdd} className="btn-pop flex-1 justify-center" disabled={outOfStock}>
-              <ShoppingBag size={18}/> {outOfStock ? "Sold out" : "Add to bag"}
+              <ShoppingBag size={18}/> {outOfStock ? "Sold out" : `Add to bag${qty > 1 ? ` · ${qty}` : ""}`}
             </button>
             <WishlistButton productId={product.id}/>
           </div>
+          {hasVariants && !outOfStock && qty >= variantStock && (
+            <p className="text-xs text-muted-foreground mt-2">Max available: {variantStock}</p>
+          )}
 
           <div className="mt-8 grid grid-cols-3 gap-2 text-xs">
             <div className="sticker-sm rounded-xl p-3 bg-white"><Truck size={16} className="mb-1"/>Free ship $80+</div>
