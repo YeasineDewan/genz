@@ -383,24 +383,41 @@ export type CouponValidation =
   | { ok: true; coupon: Coupon; discount: number }
   | { ok: false; reason: string };
 
-export const validateCoupon = (code: string, subtotal: number): CouponValidation => {
+export const validateCoupon = (code: string, subtotal: number, ctx?: { userId?: string }): CouponValidation => {
   const c = findCoupon(code);
   if (!c) return { ok: false, reason: "Code not found" };
   if (!c.active) return { ok: false, reason: "Code is inactive" };
-  if (c.expiresAt && c.expiresAt < Date.now()) return { ok: false, reason: "Code has expired" };
+  const now = Date.now();
+  if (c.startsAt && c.startsAt > now) return { ok: false, reason: `Active from ${new Date(c.startsAt).toLocaleDateString()}` };
+  if (c.expiresAt && c.expiresAt < now) return { ok: false, reason: "Code has expired" };
   if (c.maxUses && c.uses >= c.maxUses) return { ok: false, reason: "Code usage limit reached" };
-  if (c.minSubtotal && subtotal < c.minSubtotal) return { ok: false, reason: `Min subtotal $${c.minSubtotal}` };
+  if (c.minSubtotal && subtotal < c.minSubtotal) {
+    return { ok: false, reason: `Min subtotal $${c.minSubtotal.toFixed(2)} required` };
+  }
+  if (c.maxPerUser && ctx?.userId) {
+    const used = (c.redemptions ?? []).filter((r) => r.userId === ctx.userId).length;
+    if (used >= c.maxPerUser) return { ok: false, reason: `Limit ${c.maxPerUser} per customer reached` };
+  }
+  if (c.firstOrderOnly && ctx?.userId) {
+    const prior = read<Order[]>(KEYS.orders, []).some((o) => o.userId === ctx.userId && o.status !== "cancelled");
+    if (prior) return { ok: false, reason: "First-order only" };
+  }
+  if (!(c.value > 0)) return { ok: false, reason: "Invalid discount value" };
+  if (c.type === "percent" && c.value > 100) return { ok: false, reason: "Invalid percent value" };
   const discount = c.type === "percent"
     ? Math.min(subtotal, (subtotal * c.value) / 100)
     : Math.min(subtotal, c.value);
-  return { ok: true, coupon: c, discount };
+  return { ok: true, coupon: c, discount: Math.round(discount * 100) / 100 };
 };
 
-export const consumeCoupon = (id: string) => {
+export const consumeCoupon = (id: string, redemption?: CouponRedemption) => {
   const list = getCoupons();
   const c = list.find((x) => x.id === id);
   if (!c) return;
   c.uses = (c.uses ?? 0) + 1;
+  if (redemption) {
+    c.redemptions = [...(c.redemptions ?? []), redemption];
+  }
   write(KEYS.coupons, list);
 };
 
