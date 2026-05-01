@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import {
   useProducts, useUser, saveProduct, deleteProduct, formatPrice,
@@ -944,14 +944,29 @@ function VariantMatrix({
 function emptyCoupon(): Coupon {
   return {
     id: crypto.randomUUID(), code: "", type: "percent", value: 10,
-    uses: 0, active: true,
+    uses: 0, active: true, redemptions: [], createdAt: Date.now(),
   };
 }
 
 function Coupons() {
   const coupons = useCoupons();
   const [editing, setEditing] = useState<Coupon | null>(null);
+  const [viewing, setViewing] = useState<Coupon | null>(null);
   const sorted = useMemo(() => [...coupons].sort((a, b) => Number(b.active) - Number(a.active)), [coupons]);
+
+  const totals = useMemo(() => {
+    const totalRedemptions = coupons.reduce((s, c) => s + (c.uses ?? 0), 0);
+    const totalDiscount = coupons.reduce(
+      (s, c) => s + (c.redemptions ?? []).reduce((x, r) => x + r.discount, 0),
+      0,
+    );
+    const live = coupons.filter((c) => {
+      const expired = c.expiresAt && c.expiresAt < Date.now();
+      const exhausted = c.maxUses && c.uses >= c.maxUses;
+      return c.active && !expired && !exhausted;
+    }).length;
+    return { totalRedemptions, totalDiscount, live };
+  }, [coupons]);
 
   return (
     <div className="space-y-4">
@@ -962,6 +977,15 @@ function Coupons() {
         </div>
         <button onClick={() => setEditing(emptyCoupon())} className="btn-pop"><Plus size={16}/> New code</button>
       </div>
+
+      {coupons.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Stat label="Live codes" value={String(totals.live)} Icon={Ticket} bg="bg-pop-cyan"/>
+          <Stat label="Total redemptions" value={String(totals.totalRedemptions)} Icon={Check} bg="bg-pop-yellow"/>
+          <Stat label="Discount given" value={formatPrice(totals.totalDiscount)} Icon={DollarSign} bg="bg-pop-pink" fg="text-white"/>
+          <Stat label="All codes" value={String(coupons.length)} Icon={Tag} bg="bg-pop-orange"/>
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <div className="sticker rounded-2xl bg-white p-12 text-center">
@@ -974,29 +998,47 @@ function Coupons() {
           {sorted.map((c) => {
             const expired = c.expiresAt && c.expiresAt < Date.now();
             const exhausted = c.maxUses && c.uses >= c.maxUses;
-            const live = c.active && !expired && !exhausted;
+            const notStarted = c.startsAt && c.startsAt > Date.now();
+            const live = c.active && !expired && !exhausted && !notStarted;
+            const usePct = c.maxUses ? Math.min(100, (c.uses / c.maxUses) * 100) : 0;
+            const totalDiscount = (c.redemptions ?? []).reduce((s, r) => s + r.discount, 0);
             return (
               <div key={c.id} className={`sticker rounded-2xl p-5 ${live ? "bg-pop-yellow" : "bg-white"}`}>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-mono font-display text-3xl tracking-wider truncate">{c.code}</div>
                     <div className="text-sm font-bold mt-1">
                       {c.type === "percent" ? `${c.value}% off` : `${formatPrice(c.value)} off`}
                       {c.minSubtotal ? ` · min ${formatPrice(c.minSubtotal)}` : ""}
                     </div>
+                    {c.description && <div className="text-xs text-muted-foreground mt-1 truncate">{c.description}</div>}
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`chip text-xs ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : "bg-muted"}`}>
-                      {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : "Inactive"}
-                    </span>
-                  </div>
+                  <span className={`chip text-xs shrink-0 ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : notStarted ? "bg-pop-cyan" : "bg-muted"}`}>
+                    {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : notStarted ? "Scheduled" : "Inactive"}
+                  </span>
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
-                  <div>Uses: <span className="font-bold text-ink">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
-                  {c.expiresAt && <div>Expires: <span className="font-bold text-ink">{new Date(c.expiresAt).toLocaleDateString()}</span></div>}
+                <div className="mt-3 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Uses</span>
+                    <span className="font-bold">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
+                  {c.maxUses && (
+                    <div className="h-1.5 bg-ink/15 rounded-full overflow-hidden">
+                      <div className="h-full bg-pop-pink" style={{ width: `${usePct}%` }}/>
+                    </div>
+                  )}
+                  <div className="flex justify-between"><span className="text-muted-foreground">Discount given</span>
+                    <span className="font-bold">{formatPrice(totalDiscount)}</span></div>
+                  {c.expiresAt && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Expires</span>
+                      <span className="font-bold">{new Date(c.expiresAt).toLocaleDateString()}</span></div>
+                  )}
+                  {c.firstOrderOnly && <div className="chip bg-pop-cyan text-[10px] inline-block">First order only</div>}
+                  {c.maxPerUser && <div className="chip bg-pop-cyan text-[10px] inline-block ml-1">{c.maxPerUser}/customer</div>}
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/> Edit</button>
+                <div className="mt-4 flex gap-1.5 flex-wrap">
+                  <button onClick={() => setViewing(c)} className="chip" disabled={(c.uses ?? 0) === 0}>
+                    <History size={12}/> Usage ({c.uses})
+                  </button>
+                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/></button>
                   <button onClick={() => navigator.clipboard.writeText(c.code).then(() => toast.success("Copied"))} className="chip">Copy</button>
                   <button onClick={() => { if (confirm(`Delete "${c.code}"?`)) { deleteCoupon(c.id); toast.success("Deleted"); } }}
                     className="chip bg-destructive text-white ml-auto"><Trash2 size={12}/></button>
@@ -1008,6 +1050,59 @@ function Coupons() {
       )}
 
       {editing && <CouponDrawer coupon={editing} onClose={() => setEditing(null)}/>}
+      {viewing && <CouponRedemptionsDrawer coupon={viewing} onClose={() => setViewing(null)}/>}
+    </div>
+  );
+}
+
+function CouponRedemptionsDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void }) {
+  const list = [...(coupon.redemptions ?? [])].sort((a, b) => b.at - a.at);
+  const total = list.reduce((s, r) => s + r.discount, 0);
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-ink/40" onClick={onClose}/>
+      <div className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-cyan flex items-center justify-between sticky top-0">
+          <div>
+            <div className="text-xs uppercase font-bold opacity-80">Redemptions</div>
+            <h3 className="text-2xl font-mono">{coupon.code}</h3>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white"><X size={16}/></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="sticker-sm rounded-xl bg-white p-3">
+              <div className="text-xs uppercase font-bold opacity-70">Times used</div>
+              <div className="font-display text-2xl">{coupon.uses}</div>
+            </div>
+            <div className="sticker-sm rounded-xl bg-white p-3">
+              <div className="text-xs uppercase font-bold opacity-70">Total discount</div>
+              <div className="font-display text-2xl">{formatPrice(total)}</div>
+            </div>
+          </div>
+          {list.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No redemptions recorded yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {list.map((r, i) => (
+                <li key={i} className="sticker-sm rounded-xl bg-white p-3 text-sm">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-muted-foreground">#{r.orderId.slice(0, 8)}</div>
+                      <div className="text-xs">{new Date(r.at).toLocaleString()}</div>
+                      {r.userId && <div className="text-xs text-muted-foreground truncate">user: {r.userId.slice(0, 8)}</div>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-pop-pink">−{formatPrice(r.discount)}</div>
+                      <div className="text-xs text-muted-foreground">on {formatPrice(r.subtotal)}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1017,6 +1112,9 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
   const [expires, setExpires] = useState<string>(
     coupon.expiresAt ? new Date(coupon.expiresAt).toISOString().slice(0, 10) : "",
   );
+  const [starts, setStarts] = useState<string>(
+    coupon.startsAt ? new Date(coupon.startsAt).toISOString().slice(0, 10) : "",
+  );
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     const code = c.code.trim().toUpperCase();
@@ -1024,12 +1122,18 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
     if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return toast.error("Code must be 3–20 letters/digits");
     if (!(c.value > 0)) return toast.error("Value must be > 0");
     if (c.type === "percent" && c.value > 100) return toast.error("Percent can't exceed 100");
+    const startsAt = starts ? new Date(starts).getTime() : undefined;
+    const expiresAt = expires ? new Date(expires).getTime() : undefined;
+    if (startsAt && expiresAt && startsAt >= expiresAt) return toast.error("Start date must be before expiry");
     saveCoupon({
       ...c,
       code,
-      expiresAt: expires ? new Date(expires).getTime() : undefined,
+      startsAt,
+      expiresAt,
       minSubtotal: c.minSubtotal && c.minSubtotal > 0 ? c.minSubtotal : undefined,
       maxUses: c.maxUses && c.maxUses > 0 ? c.maxUses : undefined,
+      maxPerUser: c.maxPerUser && c.maxPerUser > 0 ? c.maxPerUser : undefined,
+      description: c.description?.trim() || undefined,
     });
     toast.success("Saved");
     onClose();
@@ -1038,7 +1142,7 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-ink/40" onClick={onClose}/>
       <form onSubmit={save} className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
-        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-pink text-white flex items-center justify-between sticky top-0 z-10">
           <h3 className="text-2xl">{coupon.code ? "Edit coupon" : "New coupon"}</h3>
           <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white text-ink"><X size={16}/></button>
         </div>
@@ -1046,6 +1150,11 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
           <Field label="Code">
             <input value={c.code} onChange={(e) => setC({ ...c, code: e.target.value.toUpperCase() })}
               className="inp font-mono uppercase tracking-wider" maxLength={20} placeholder="SUMMER25"/>
+            <div className="text-[10px] text-muted-foreground mt-1">3–20 chars · A–Z, 0–9, _, -</div>
+          </Field>
+          <Field label="Description (internal)">
+            <input value={c.description ?? ""} onChange={(e) => setC({ ...c, description: e.target.value })}
+              className="inp" maxLength={80} placeholder="e.g. Summer launch promo"/>
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Type">
@@ -1063,21 +1172,44 @@ function CouponDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void
             <Field label="Min subtotal ($)">
               <input type="number" min="0" step="0.01" value={c.minSubtotal ?? ""}
                 onChange={(e) => setC({ ...c, minSubtotal: e.target.value ? +e.target.value : undefined })}
-                className="inp" placeholder="optional"/>
+                className="inp" placeholder="none"/>
             </Field>
-            <Field label="Max uses">
+            <Field label="Max uses (total)">
               <input type="number" min="0" value={c.maxUses ?? ""}
                 onChange={(e) => setC({ ...c, maxUses: e.target.value ? +e.target.value : undefined })}
                 className="inp" placeholder="unlimited"/>
             </Field>
           </div>
-          <Field label="Expires (optional)">
-            <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+          <Field label="Max uses per customer">
+            <input type="number" min="0" value={c.maxPerUser ?? ""}
+              onChange={(e) => setC({ ...c, maxPerUser: e.target.value ? +e.target.value : undefined })}
+              className="inp" placeholder="unlimited"/>
           </Field>
-          <label className="flex items-center gap-2 mt-2 font-bold text-sm">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Starts (optional)">
+              <input type="date" value={starts} onChange={(e) => setStarts(e.target.value)} className="inp"/>
+            </Field>
+            <Field label="Expires (optional)">
+              <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} className="inp"/>
+            </Field>
+          </div>
+          <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
+            <input type="checkbox" checked={c.firstOrderOnly ?? false}
+              onChange={(e) => setC({ ...c, firstOrderOnly: e.target.checked || undefined })} className="h-4 w-4"/>
+            First-order customers only
+          </label>
+          <label className="flex items-center gap-2 font-bold text-sm cursor-pointer">
             <input type="checkbox" checked={c.active} onChange={(e) => setC({ ...c, active: e.target.checked })} className="h-4 w-4"/>
             Active
           </label>
+          {coupon.uses > 0 && (
+            <div className="text-xs text-muted-foreground border-t-2 border-ink/10 pt-3">
+              Already redeemed <span className="font-bold text-ink">{coupon.uses}</span>×
+              {coupon.redemptions && coupon.redemptions.length > 0 && (
+                <> · total discount <span className="font-bold text-ink">{formatPrice(coupon.redemptions.reduce((s, r) => s + r.discount, 0))}</span></>
+              )}
+            </div>
+          )}
           <button className="btn-pop w-full justify-center mt-3">Save coupon</button>
         </div>
         <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
@@ -1092,6 +1224,11 @@ function ReviewsModeration() {
   const reviews = useReviews();
   const products = useProducts();
   const [filter, setFilter] = useState<ReviewStatus | "all" | "reported">("all");
+  const [q, setQ] = useState("");
+  const [productFilter, setProductFilter] = useState<string>("");
+  const [ratingFilter, setRatingFilter] = useState<number | "all">("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const counts = useMemo(() => ({
     all: reviews.length,
@@ -1101,83 +1238,204 @@ function ReviewsModeration() {
     reported: reviews.filter((r) => (r.reports ?? 0) > 0).length,
   }), [reviews]);
 
+  const avgRating = useMemo(() => {
+    if (reviews.length === 0) return 0;
+    return reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  }, [reviews]);
+
   const filtered = useMemo(() => {
-    if (filter === "all") return reviews;
-    if (filter === "reported") return reviews.filter((r) => (r.reports ?? 0) > 0);
-    return reviews.filter((r) => (r.status ?? "approved") === filter);
-  }, [reviews, filter]);
+    let list = reviews;
+    if (filter === "reported") list = list.filter((r) => (r.reports ?? 0) > 0);
+    else if (filter !== "all") list = list.filter((r) => (r.status ?? "approved") === filter);
+    if (productFilter) list = list.filter((r) => r.productId === productFilter);
+    if (ratingFilter !== "all") list = list.filter((r) => r.rating === ratingFilter);
+    const term = q.trim().toLowerCase();
+    if (term) {
+      list = list.filter((r) =>
+        r.title.toLowerCase().includes(term) ||
+        r.body.toLowerCase().includes(term) ||
+        r.userName.toLowerCase().includes(term),
+      );
+    }
+    return [...list].sort((a, b) => b.at - a.at);
+  }, [reviews, filter, productFilter, ratingFilter, q]);
+
+  const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map((r) => r.id)));
+  };
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const toggleExpand = (id: string) => {
+    const next = new Set(expanded);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setExpanded(next);
+  };
+
+  const bulkUpdate = (action: "approve" | "hide" | "delete") => {
+    if (selected.size === 0) return;
+    const ids = [...selected];
+    if (action === "delete") {
+      if (!confirm(`Delete ${ids.length} review${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+      ids.forEach((id) => deleteReview(id));
+      toast.success(`Deleted ${ids.length}`);
+    } else {
+      const status: ReviewStatus = action === "approve" ? "approved" : "hidden";
+      ids.forEach((id) => setReviewStatus(id, status));
+      toast.success(`${action === "approve" ? "Approved" : "Hidden"} ${ids.length}`);
+    }
+    setSelected(new Set());
+  };
 
   const FilterChip = ({ k, label }: { k: typeof filter; label: string }) => (
-    <button onClick={() => setFilter(k)} className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
-      {label} ({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})
+    <button onClick={() => { setFilter(k); setSelected(new Set()); }}
+      className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
+      {label} <span className="opacity-70 ml-1">({k === "all" ? counts.all : counts[k as keyof typeof counts] ?? 0})</span>
     </button>
   );
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-3xl">Review moderation</h2>
-        <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <FilterChip k="all" label="All"/>
-        <FilterChip k="approved" label="Approved"/>
-        <FilterChip k="pending" label="Pending"/>
-        <FilterChip k="hidden" label="Hidden"/>
-        <FilterChip k="reported" label="Reported"/>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-3xl">Review moderation</h2>
+          <p className="text-sm text-muted-foreground">Approve, hide, or remove customer reviews. Reviews auto-flag after 3 reports.</p>
+        </div>
       </div>
 
+      {/* Quick stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Total reviews" value={String(counts.all)} Icon={MessageSquare} bg="bg-pop-cyan"/>
+        <Stat label="Avg rating" value={avgRating.toFixed(1) + " ★"} Icon={Check} bg="bg-pop-yellow"/>
+        <Stat label="Awaiting review" value={String(counts.pending)} Icon={AlertTriangle} bg="bg-pop-orange" warn={counts.pending > 0}/>
+        <Stat label="Reported" value={String(counts.reported)} Icon={Flag} bg="bg-destructive" fg="text-white" warn={counts.reported > 0}/>
+      </div>
+
+      {/* Filters */}
+      <div className="sticker rounded-2xl bg-white p-4 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <FilterChip k="all" label="All"/>
+          <FilterChip k="pending" label="Pending"/>
+          <FilterChip k="approved" label="Approved"/>
+          <FilterChip k="hidden" label="Hidden"/>
+          <FilterChip k="reported" label="Reported"/>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-2">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search title, body, author..."
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none"/>
+          <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)}
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none">
+            <option value="">All products</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value === "all" ? "all" : +e.target.value)}
+            className="border-2 border-ink rounded-full px-4 py-1.5 text-sm bg-white outline-none">
+            <option value="all">All ratings</option>
+            {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{n} star{n === 1 ? "" : "s"}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="sticker rounded-2xl bg-pop-pink text-white p-3 flex items-center gap-2 flex-wrap sticky top-32 z-20">
+          <span className="font-bold">{selected.size} selected</span>
+          <div className="flex-1"/>
+          <button onClick={() => bulkUpdate("approve")} className="chip bg-pop-cyan text-ink"><Check size={12}/> Approve</button>
+          <button onClick={() => bulkUpdate("hide")} className="chip bg-white text-ink"><EyeOff size={12}/> Hide</button>
+          <button onClick={() => bulkUpdate("delete")} className="chip bg-destructive text-white border-2 border-white"><Trash2 size={12}/> Delete</button>
+          <button onClick={() => setSelected(new Set())} className="chip bg-white text-ink"><X size={12}/></button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
-        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews here.</div>
+        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No reviews match your filters.</div>
       ) : (
-        <ul className="space-y-3">
-          {filtered.map((r) => {
-            const p = products.find((x) => x.id === r.productId);
-            const status = r.status ?? "approved";
-            const reports = r.reports ?? 0;
-            return (
-              <li key={r.id} className="sticker rounded-2xl bg-white p-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    {p && <img src={p.image} alt="" className="h-12 w-12 rounded border-2 border-ink object-cover shrink-0"/>}
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">{p?.name ?? "(deleted)"}</div>
-                      <div className="font-bold flex items-center gap-2 flex-wrap">
-                        <span>{r.title}</span>
-                        <span className="text-pop-pink">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
-                      </div>
-                      <p className="text-sm mt-1 whitespace-pre-wrap">{r.body}</p>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        by {r.userName} · {new Date(r.at).toLocaleDateString()}
+        <>
+          <div className="flex items-center gap-2 px-1">
+            <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4"/>
+              Select all on page ({filtered.length})
+            </label>
+          </div>
+          <ul className="space-y-3">
+            {filtered.map((r) => {
+              const p = products.find((x) => x.id === r.productId);
+              const status = r.status ?? "approved";
+              const reports = r.reports ?? 0;
+              const isExpanded = expanded.has(r.id);
+              const longBody = r.body.length > 200;
+              const displayBody = isExpanded || !longBody ? r.body : r.body.slice(0, 200) + "…";
+              const isSelected = selected.has(r.id);
+              return (
+                <li key={r.id}
+                  className={`sticker rounded-2xl p-4 transition ${isSelected ? "bg-pop-yellow/40 ring-2 ring-pop-pink" : "bg-white"} ${status === "pending" ? "border-l-8 border-l-pop-orange" : status === "hidden" ? "opacity-70" : ""}`}>
+                  <div className="flex items-start gap-3 flex-wrap">
+                    <input type="checkbox" checked={isSelected} onChange={() => toggleOne(r.id)}
+                      className="h-4 w-4 mt-2 shrink-0"/>
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      {p ? (
+                        <Link to="/product/$slug" params={{ slug: p.slug }} className="shrink-0">
+                          <img src={p.image} alt="" className="h-14 w-14 rounded border-2 border-ink object-cover"/>
+                        </Link>
+                      ) : (
+                        <div className="h-14 w-14 rounded border-2 border-ink bg-muted shrink-0 grid place-items-center text-xs">N/A</div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-muted-foreground truncate">{p?.name ?? "(deleted product)"}</div>
+                        <div className="font-bold flex items-center gap-2 flex-wrap">
+                          <span>{r.title}</span>
+                          <span className="text-pop-pink text-sm tracking-tighter">{"★".repeat(r.rating)}<span className="text-ink/20">{"★".repeat(5 - r.rating)}</span></span>
+                        </div>
+                        <p className="text-sm mt-1 whitespace-pre-wrap break-words">{displayBody}</p>
+                        {longBody && (
+                          <button onClick={() => toggleExpand(r.id)} className="text-xs font-bold text-pop-pink mt-1 hover:underline">
+                            {isExpanded ? "Show less" : "Show more"}
+                          </button>
+                        )}
+                        <div className="text-xs text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-ink">{r.userName}</span>
+                          <span>·</span>
+                          <span title={new Date(r.at).toLocaleString()}>{new Date(r.at).toLocaleDateString()}</span>
+                        </div>
                       </div>
                     </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
+                        {status}
+                      </span>
+                      {reports > 0 && (
+                        <span className="chip bg-destructive text-white text-xs" title={`${reports} user report${reports === 1 ? "" : "s"}`}>
+                          <Flag size={10}/> {reports}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className={`chip text-xs ${status === "approved" ? "bg-pop-cyan" : status === "pending" ? "bg-pop-orange" : "bg-muted"}`}>
-                      {status}
-                    </span>
-                    {reports > 0 && (
-                      <span className="chip bg-destructive text-white text-xs"><Flag size={10}/> {reports}</span>
+                  <div className="mt-3 flex flex-wrap gap-2 justify-end pt-2 border-t border-ink/10">
+                    {status !== "approved" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
                     )}
+                    {status !== "hidden" && (
+                      <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
+                    )}
+                    {status === "hidden" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip bg-pop-cyan"><Eye size={12}/> Restore</button>
+                    )}
+                    {status === "pending" && (
+                      <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-yellow"><Check size={12}/> Quick approve</button>
+                    )}
+                    <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
+                      className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
                   </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                  {status !== "approved" && (
-                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Approved"); }} className="chip bg-pop-cyan"><Check size={12}/> Approve</button>
-                  )}
-                  {status !== "hidden" && (
-                    <button onClick={() => { setReviewStatus(r.id, "hidden"); toast.success("Hidden"); }} className="chip"><EyeOff size={12}/> Hide</button>
-                  )}
-                  {status === "hidden" && (
-                    <button onClick={() => { setReviewStatus(r.id, "approved"); toast.success("Restored"); }} className="chip"><Eye size={12}/> Show</button>
-                  )}
-                  <button onClick={() => { if (confirm("Delete this review?")) { deleteReview(r.id); toast.success("Deleted"); } }}
-                    className="chip bg-destructive text-white"><Trash2 size={12}/> Delete</button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </div>
   );

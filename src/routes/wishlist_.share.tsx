@@ -12,7 +12,7 @@ const searchSchema = z.object({
   by: z.string().optional(),
 });
 
-export const Route = createFileRoute("/wishlist/share")({
+export const Route = createFileRoute("/wishlist_/share")({
   validateSearch: searchSchema,
   head: () => ({
     meta: [

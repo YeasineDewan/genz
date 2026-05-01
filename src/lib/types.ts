@@ -103,6 +103,13 @@ export interface Review {
 }
 
 export type CouponType = "percent" | "fixed";
+export interface CouponRedemption {
+  at: number;
+  orderId: string;
+  userId?: string;
+  discount: number;
+  subtotal: number;
+}
 export interface Coupon {
   id: string;
   code: string;        // uppercase
@@ -110,7 +117,13 @@ export interface Coupon {
   value: number;       // % or $ amount
   minSubtotal?: number;
   maxUses?: number;
-  uses: number;
-  active: boolean;
+  maxPerUser?: number;     // limit redemptions per user
+  startsAt?: number;       // not redeemable before
   expiresAt?: number;
+  firstOrderOnly?: boolean; // only redeemable on a user's first order
+  active: boolean;
+  uses: number;
+  redemptions?: CouponRedemption[]; // history of usage
+  createdAt?: number;
+  description?: string;
 }
