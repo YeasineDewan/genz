@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { Tag, X, Check } from "lucide-react";
-import { validateCoupon, useAppliedCoupon, setAppliedCoupon } from "@/lib/store";
+import { validateCoupon, useAppliedCoupon, setAppliedCoupon, useUser } from "@/lib/store";
 import { toast } from "sonner";
 
 export function CouponInput({ subtotal }: { subtotal: number }) {
   const applied = useAppliedCoupon();
+  const user = useUser();
   const [code, setCode] = useState("");
   const [open, setOpen] = useState(false);
 
-  const result = applied ? validateCoupon(applied, subtotal) : null;
+  const result = applied ? validateCoupon(applied, subtotal, { userId: user?.id }) : null;
   const isValid = result?.ok;
 
   const apply = () => {
     if (!code.trim()) return;
-    const r = validateCoupon(code, subtotal);
+    const r = validateCoupon(code, subtotal, { userId: user?.id });
     if (!r.ok) { toast.error(r.reason); return; }
     setAppliedCoupon(r.coupon.code);
     setCode(""); setOpen(false);
