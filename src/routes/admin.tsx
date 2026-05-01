@@ -951,7 +951,22 @@ function emptyCoupon(): Coupon {
 function Coupons() {
   const coupons = useCoupons();
   const [editing, setEditing] = useState<Coupon | null>(null);
+  const [viewing, setViewing] = useState<Coupon | null>(null);
   const sorted = useMemo(() => [...coupons].sort((a, b) => Number(b.active) - Number(a.active)), [coupons]);
+
+  const totals = useMemo(() => {
+    const totalRedemptions = coupons.reduce((s, c) => s + (c.uses ?? 0), 0);
+    const totalDiscount = coupons.reduce(
+      (s, c) => s + (c.redemptions ?? []).reduce((x, r) => x + r.discount, 0),
+      0,
+    );
+    const live = coupons.filter((c) => {
+      const expired = c.expiresAt && c.expiresAt < Date.now();
+      const exhausted = c.maxUses && c.uses >= c.maxUses;
+      return c.active && !expired && !exhausted;
+    }).length;
+    return { totalRedemptions, totalDiscount, live };
+  }, [coupons]);
 
   return (
     <div className="space-y-4">
@@ -962,6 +977,15 @@ function Coupons() {
         </div>
         <button onClick={() => setEditing(emptyCoupon())} className="btn-pop"><Plus size={16}/> New code</button>
       </div>
+
+      {coupons.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Stat label="Live codes" value={String(totals.live)} Icon={Ticket} bg="bg-pop-cyan"/>
+          <Stat label="Total redemptions" value={String(totals.totalRedemptions)} Icon={Check} bg="bg-pop-yellow"/>
+          <Stat label="Discount given" value={formatPrice(totals.totalDiscount)} Icon={DollarSign} bg="bg-pop-pink" fg="text-white"/>
+          <Stat label="All codes" value={String(coupons.length)} Icon={Tag} bg="bg-pop-orange"/>
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <div className="sticker rounded-2xl bg-white p-12 text-center">
@@ -974,29 +998,47 @@ function Coupons() {
           {sorted.map((c) => {
             const expired = c.expiresAt && c.expiresAt < Date.now();
             const exhausted = c.maxUses && c.uses >= c.maxUses;
-            const live = c.active && !expired && !exhausted;
+            const notStarted = c.startsAt && c.startsAt > Date.now();
+            const live = c.active && !expired && !exhausted && !notStarted;
+            const usePct = c.maxUses ? Math.min(100, (c.uses / c.maxUses) * 100) : 0;
+            const totalDiscount = (c.redemptions ?? []).reduce((s, r) => s + r.discount, 0);
             return (
               <div key={c.id} className={`sticker rounded-2xl p-5 ${live ? "bg-pop-yellow" : "bg-white"}`}>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-mono font-display text-3xl tracking-wider truncate">{c.code}</div>
                     <div className="text-sm font-bold mt-1">
                       {c.type === "percent" ? `${c.value}% off` : `${formatPrice(c.value)} off`}
                       {c.minSubtotal ? ` · min ${formatPrice(c.minSubtotal)}` : ""}
                     </div>
+                    {c.description && <div className="text-xs text-muted-foreground mt-1 truncate">{c.description}</div>}
                   </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`chip text-xs ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : "bg-muted"}`}>
-                      {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : "Inactive"}
-                    </span>
-                  </div>
+                  <span className={`chip text-xs shrink-0 ${live ? "bg-ink text-white" : expired ? "bg-destructive text-white" : exhausted ? "bg-pop-orange" : notStarted ? "bg-pop-cyan" : "bg-muted"}`}>
+                    {live ? "Live" : expired ? "Expired" : exhausted ? "Used up" : notStarted ? "Scheduled" : "Inactive"}
+                  </span>
                 </div>
-                <div className="mt-3 text-xs text-muted-foreground space-y-0.5">
-                  <div>Uses: <span className="font-bold text-ink">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
-                  {c.expiresAt && <div>Expires: <span className="font-bold text-ink">{new Date(c.expiresAt).toLocaleDateString()}</span></div>}
+                <div className="mt-3 text-xs space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Uses</span>
+                    <span className="font-bold">{c.uses}{c.maxUses ? ` / ${c.maxUses}` : ""}</span></div>
+                  {c.maxUses && (
+                    <div className="h-1.5 bg-ink/15 rounded-full overflow-hidden">
+                      <div className="h-full bg-pop-pink" style={{ width: `${usePct}%` }}/>
+                    </div>
+                  )}
+                  <div className="flex justify-between"><span className="text-muted-foreground">Discount given</span>
+                    <span className="font-bold">{formatPrice(totalDiscount)}</span></div>
+                  {c.expiresAt && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">Expires</span>
+                      <span className="font-bold">{new Date(c.expiresAt).toLocaleDateString()}</span></div>
+                  )}
+                  {c.firstOrderOnly && <div className="chip bg-pop-cyan text-[10px] inline-block">First order only</div>}
+                  {c.maxPerUser && <div className="chip bg-pop-cyan text-[10px] inline-block ml-1">{c.maxPerUser}/customer</div>}
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/> Edit</button>
+                <div className="mt-4 flex gap-1.5 flex-wrap">
+                  <button onClick={() => setViewing(c)} className="chip" disabled={(c.uses ?? 0) === 0}>
+                    <History size={12}/> Usage ({c.uses})
+                  </button>
+                  <button onClick={() => setEditing({ ...c })} className="chip"><Pencil size={12}/></button>
                   <button onClick={() => navigator.clipboard.writeText(c.code).then(() => toast.success("Copied"))} className="chip">Copy</button>
                   <button onClick={() => { if (confirm(`Delete "${c.code}"?`)) { deleteCoupon(c.id); toast.success("Deleted"); } }}
                     className="chip bg-destructive text-white ml-auto"><Trash2 size={12}/></button>
@@ -1008,6 +1050,59 @@ function Coupons() {
       )}
 
       {editing && <CouponDrawer coupon={editing} onClose={() => setEditing(null)}/>}
+      {viewing && <CouponRedemptionsDrawer coupon={viewing} onClose={() => setViewing(null)}/>}
+    </div>
+  );
+}
+
+function CouponRedemptionsDrawer({ coupon, onClose }: { coupon: Coupon; onClose: () => void }) {
+  const list = [...(coupon.redemptions ?? [])].sort((a, b) => b.at - a.at);
+  const total = list.reduce((s, r) => s + r.discount, 0);
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-ink/40" onClick={onClose}/>
+      <div className="w-full max-w-md bg-paper border-l-[3px] border-ink overflow-auto">
+        <div className="p-4 border-b-[3px] border-ink bg-pop-cyan flex items-center justify-between sticky top-0">
+          <div>
+            <div className="text-xs uppercase font-bold opacity-80">Redemptions</div>
+            <h3 className="text-2xl font-mono">{coupon.code}</h3>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white"><X size={16}/></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="sticker-sm rounded-xl bg-white p-3">
+              <div className="text-xs uppercase font-bold opacity-70">Times used</div>
+              <div className="font-display text-2xl">{coupon.uses}</div>
+            </div>
+            <div className="sticker-sm rounded-xl bg-white p-3">
+              <div className="text-xs uppercase font-bold opacity-70">Total discount</div>
+              <div className="font-display text-2xl">{formatPrice(total)}</div>
+            </div>
+          </div>
+          {list.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No redemptions recorded yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {list.map((r, i) => (
+                <li key={i} className="sticker-sm rounded-xl bg-white p-3 text-sm">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-muted-foreground">#{r.orderId.slice(0, 8)}</div>
+                      <div className="text-xs">{new Date(r.at).toLocaleString()}</div>
+                      {r.userId && <div className="text-xs text-muted-foreground truncate">user: {r.userId.slice(0, 8)}</div>}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold text-pop-pink">−{formatPrice(r.discount)}</div>
+                      <div className="text-xs text-muted-foreground">on {formatPrice(r.subtotal)}</div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
