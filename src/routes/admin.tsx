@@ -9,6 +9,7 @@ import {
   useReviews, setReviewStatus, deleteReview,
 } from "@/lib/store";
 import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
+import { REPORT_REASONS, type ReportReason } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
@@ -720,6 +721,8 @@ function Inventory() {
         <Stat label="Out of stock" value={String(totals.out)} Icon={X as any} bg="bg-destructive" fg="text-white" warn={totals.out > 0}/>
       </div>
 
+      <StockAuditTool products={products}/>
+
       <div className="sticker rounded-2xl bg-white overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-pop-yellow border-b-[3px] border-ink">
@@ -824,7 +827,195 @@ function Inventory() {
   );
 }
 
-/* ───────────── Variant matrix ───────────── */
+/* ───────────── Stock audit tool ───────────── */
+
+const LOW_STOCK_THRESHOLD = 5;
+
+type StockIssue = {
+  productId: string;
+  productName: string;
+  productSlug: string;
+  productImage: string;
+  severity: "high" | "medium" | "low";
+  category: "out_of_stock" | "low_stock" | "variant_mismatch" | "missing_variants" | "orphan_variants" | "negative_stock";
+  message: string;
+  detail?: string;
+};
+
+function auditProducts(products: Product[]): StockIssue[] {
+  const issues: StockIssue[] = [];
+  for (const p of products) {
+    const base = {
+      productId: p.id, productName: p.name, productSlug: p.slug, productImage: p.image,
+    };
+    if (p.stock < 0) {
+      issues.push({ ...base, severity: "high", category: "negative_stock",
+        message: "Negative stock value", detail: `Current stock is ${p.stock}` });
+    }
+    if (p.stock === 0 && (!p.variants || p.variants.every((v) => v.stock === 0))) {
+      issues.push({ ...base, severity: "high", category: "out_of_stock",
+        message: "Out of stock", detail: "Customers cannot purchase this item" });
+    } else if (p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD) {
+      issues.push({ ...base, severity: "medium", category: "low_stock",
+        message: `Low stock — only ${p.stock} left`, detail: `At or below threshold (${LOW_STOCK_THRESHOLD})` });
+    }
+    if (p.variants && p.variants.length > 0) {
+      const expected = p.sizes.length * p.colors.length;
+      const expectedSet = new Set(p.sizes.flatMap((s) => p.colors.map((c) => `${s}__${c}`)));
+      const variantSet = new Set(p.variants.map((v) => `${v.size}__${v.color}`));
+      const missing = [...expectedSet].filter((k) => !variantSet.has(k));
+      const orphan = p.variants.filter((v) => !expectedSet.has(`${v.size}__${v.color}`));
+      if (missing.length > 0) {
+        issues.push({ ...base, severity: "medium", category: "missing_variants",
+          message: `${missing.length} of ${expected} size/color combos missing`,
+          detail: missing.slice(0, 4).map((k) => k.replace("__", "/")).join(", ") + (missing.length > 4 ? "…" : "") });
+      }
+      if (orphan.length > 0) {
+        issues.push({ ...base, severity: "low", category: "orphan_variants",
+          message: `${orphan.length} orphan variant${orphan.length === 1 ? "" : "s"}`,
+          detail: "Variants reference sizes/colors no longer on this product" });
+      }
+      const variantTotal = p.variants.reduce((s, v) => s + v.stock, 0);
+      if (variantTotal !== p.stock) {
+        issues.push({ ...base, severity: "high", category: "variant_mismatch",
+          message: "Variant stock doesn't match total",
+          detail: `Sum of variants = ${variantTotal}, product.stock = ${p.stock}` });
+      }
+    }
+  }
+  return issues.sort((a, b) => {
+    const order = { high: 0, medium: 1, low: 2 };
+    return order[a.severity] - order[b.severity];
+  });
+}
+
+const SEVERITY_STYLES = {
+  high: { bg: "bg-destructive/10 border-l-destructive", chip: "bg-destructive text-white", label: "High" },
+  medium: { bg: "bg-pop-orange/20 border-l-pop-orange", chip: "bg-pop-orange", label: "Medium" },
+  low: { bg: "bg-pop-yellow/30 border-l-pop-yellow", chip: "bg-pop-yellow", label: "Low" },
+} as const;
+
+function StockAuditTool({ products }: { products: Product[] }) {
+  const [open, setOpen] = useState(true);
+  const [filter, setFilter] = useState<"all" | StockIssue["severity"]>("all");
+  const issues = useMemo(() => auditProducts(products), [products]);
+  const counts = useMemo(() => ({
+    high: issues.filter((i) => i.severity === "high").length,
+    medium: issues.filter((i) => i.severity === "medium").length,
+    low: issues.filter((i) => i.severity === "low").length,
+  }), [issues]);
+  const filtered = useMemo(
+    () => filter === "all" ? issues : issues.filter((i) => i.severity === filter),
+    [issues, filter],
+  );
+
+  const fixMismatch = (issue: StockIssue) => {
+    const p = products.find((x) => x.id === issue.productId);
+    if (!p || !p.variants) return;
+    const total = p.variants.reduce((s, v) => s + v.stock, 0);
+    saveProduct({ ...p, stock: total }, { stockSource: "manual", stockNote: "Audit: synced total to variant sum" });
+    toast.success(`${p.name} → ${total} (synced)`);
+  };
+
+  const removeOrphans = (issue: StockIssue) => {
+    const p = products.find((x) => x.id === issue.productId);
+    if (!p || !p.variants) return;
+    const expectedSet = new Set(p.sizes.flatMap((s) => p.colors.map((c) => `${s}__${c}`)));
+    const cleaned = p.variants.filter((v) => expectedSet.has(`${v.size}__${v.color}`));
+    saveProduct({ ...p, variants: cleaned }, { stockSource: "manual", stockNote: "Audit: removed orphan variants" });
+    toast.success(`${p.name}: removed ${p.variants.length - cleaned.length} orphans`);
+  };
+
+  const fillMissing = (issue: StockIssue) => {
+    const p = products.find((x) => x.id === issue.productId);
+    if (!p) return;
+    const existing = new Map((p.variants ?? []).map((v) => [`${v.size}__${v.color}`, v.stock]));
+    const next: VariantStock[] = [];
+    p.sizes.forEach((s) => p.colors.forEach((c) => {
+      next.push({ size: s, color: c, stock: existing.get(`${s}__${c}`) ?? 0 });
+    }));
+    const total = next.reduce((s, v) => s + v.stock, 0);
+    saveProduct({ ...p, variants: next, stock: total }, { stockSource: "manual", stockNote: "Audit: filled missing variants" });
+    toast.success(`${p.name}: filled missing combos`);
+  };
+
+  return (
+    <div className="sticker rounded-2xl bg-white p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="text-2xl flex items-center gap-2">
+            <AlertTriangle size={20} className={issues.length === 0 ? "text-pop-cyan" : "text-pop-orange"}/>
+            Stock audit
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            Flags low stock, out-of-stock, and inconsistent size/color variant data.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`chip ${counts.high > 0 ? "bg-destructive text-white" : "bg-muted"}`}>{counts.high} high</span>
+          <span className={`chip ${counts.medium > 0 ? "bg-pop-orange" : "bg-muted"}`}>{counts.medium} med</span>
+          <span className={`chip ${counts.low > 0 ? "bg-pop-yellow" : "bg-muted"}`}>{counts.low} low</span>
+          <button onClick={() => setOpen((v) => !v)} className="chip">{open ? "Hide" : "Show"}</button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-4">
+          {issues.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">
+              <Check className="mx-auto mb-2 text-pop-cyan" size={28}/>
+              All clear — no stock issues detected.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {(["all", "high", "medium", "low"] as const).map((k) => (
+                  <button key={k} onClick={() => setFilter(k)}
+                    className={`chip ${filter === k ? "bg-pop-pink text-white" : ""}`}>
+                    {k === "all" ? `All (${issues.length})` : `${k} (${counts[k]})`}
+                  </button>
+                ))}
+              </div>
+              <ul className="space-y-2">
+                {filtered.map((issue, i) => {
+                  const styles = SEVERITY_STYLES[issue.severity];
+                  return (
+                    <li key={`${issue.productId}-${issue.category}-${i}`}
+                      className={`border-l-8 rounded-xl p-3 ${styles.bg} flex items-start gap-3 flex-wrap`}>
+                      <img src={issue.productImage} alt="" className="h-10 w-10 rounded border-2 border-ink object-cover shrink-0"/>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`chip text-[10px] ${styles.chip}`}>{styles.label}</span>
+                          <Link to="/product/$slug" params={{ slug: issue.productSlug }} className="font-bold hover:underline truncate">
+                            {issue.productName}
+                          </Link>
+                        </div>
+                        <div className="text-sm font-bold mt-1">{issue.message}</div>
+                        {issue.detail && <div className="text-xs text-muted-foreground">{issue.detail}</div>}
+                      </div>
+                      <div className="flex gap-1 flex-wrap">
+                        {issue.category === "variant_mismatch" && (
+                          <button onClick={() => fixMismatch(issue)} className="chip bg-pop-cyan"><Check size={12}/> Sync total</button>
+                        )}
+                        {issue.category === "orphan_variants" && (
+                          <button onClick={() => removeOrphans(issue)} className="chip bg-pop-orange"><Trash2 size={12}/> Remove</button>
+                        )}
+                        {issue.category === "missing_variants" && (
+                          <button onClick={() => fillMissing(issue)} className="chip bg-pop-cyan"><Plus size={12}/> Fill at 0</button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function VariantMatrix({
   product, onChange,
@@ -1402,6 +1593,9 @@ function ReviewsModeration() {
                           <span>·</span>
                           <span title={new Date(r.at).toLocaleString()}>{new Date(r.at).toLocaleDateString()}</span>
                         </div>
+                        {reports > 0 && (
+                          <ReportBreakdown reports={r.reportLog ?? []} total={reports}/>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2 shrink-0">
@@ -1450,3 +1644,51 @@ function Field({ label, error, children }: { label: string; error?: string; chil
     </label>
   );
 }
+
+function ReportBreakdown({ reports, total }: { reports: { reason: ReportReason; note?: string; at: number }[]; total: number }) {
+  const [open, setOpen] = useState(false);
+  const counts = useMemo(() => {
+    const map = new Map<ReportReason, number>();
+    reports.forEach((r) => map.set(r.reason, (map.get(r.reason) ?? 0) + 1));
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [reports]);
+  const labelFor = (v: ReportReason) => REPORT_REASONS.find((x) => x.value === v)?.label ?? v;
+
+  // Legacy reports without a log
+  if (reports.length === 0) {
+    return (
+      <div className="mt-2 text-xs text-muted-foreground italic">
+        {total} report{total === 1 ? "" : "s"} (no reason recorded)
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-xs font-bold uppercase text-destructive">Reports:</span>
+        {counts.map(([reason, n]) => (
+          <span key={reason} className="chip bg-destructive/10 text-destructive border-destructive/40 text-[10px]">
+            <Flag size={10}/> {labelFor(reason)} × {n}
+          </span>
+        ))}
+        {reports.some((r) => r.note) && (
+          <button onClick={() => setOpen((v) => !v)} className="chip text-[10px] bg-pop-yellow">
+            {open ? "Hide notes" : "Show notes"}
+          </button>
+        )}
+      </div>
+      {open && (
+        <ul className="mt-2 space-y-1 text-xs border-l-2 border-destructive/40 pl-3">
+          {reports.filter((r) => r.note).map((r, i) => (
+            <li key={i} className="text-muted-foreground">
+              <span className="font-bold text-ink">{labelFor(r.reason)}:</span> {r.note}
+              <span className="opacity-60"> · {new Date(r.at).toLocaleDateString()}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+

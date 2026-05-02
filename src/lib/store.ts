@@ -5,7 +5,7 @@ import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
-  Review, ReviewStatus, Coupon, CouponRedemption,
+  Review, ReviewStatus, ReportReason, Coupon, CouponRedemption,
 } from "./types";
 
 const KEYS = {
@@ -324,11 +324,17 @@ export const setReviewStatus = (id: string, status: ReviewStatus) => {
   r.status = status;
   write(KEYS.reviews, list);
 };
-export const reportReview = (id: string) => {
+export const reportReview = (
+  id: string,
+  reason: ReportReason = "other",
+  note?: string,
+  userId?: string,
+) => {
   const list = getReviews();
   const r = list.find((x) => x.id === id);
   if (!r) return;
   r.reports = (r.reports ?? 0) + 1;
+  r.reportLog = [...(r.reportLog ?? []), { reason, note: note?.trim() || undefined, at: Date.now(), userId }];
   // auto-flag for moderation after 3 reports
   if ((r.reports ?? 0) >= 3 && (r.status ?? "approved") === "approved") r.status = "pending";
   write(KEYS.reviews, list);
