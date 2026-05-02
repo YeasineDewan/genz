@@ -89,6 +89,13 @@ export interface StockAuditEntry {
 }
 
 export type ReviewStatus = "pending" | "approved" | "hidden";
+export type ReportReason = "spam" | "offensive" | "off_topic" | "fake" | "misleading" | "other";
+export interface ReviewReport {
+  reason: ReportReason;
+  note?: string;
+  at: number;
+  userId?: string;
+}
 export interface Review {
   id: string;
   productId: string;
@@ -100,7 +107,17 @@ export interface Review {
   at: number;
   status?: ReviewStatus; // default approved (back-compat)
   reports?: number;
+  reportLog?: ReviewReport[];
 }
+
+export const REPORT_REASONS: { value: import("./types").ReportReason; label: string; description: string }[] = [
+  { value: "spam", label: "Spam", description: "Promotional or repeated content" },
+  { value: "offensive", label: "Offensive", description: "Hate speech, harassment, or abuse" },
+  { value: "off_topic", label: "Off-topic", description: "Not about this product" },
+  { value: "fake", label: "Fake review", description: "Suspected paid or fake review" },
+  { value: "misleading", label: "Misleading", description: "Inaccurate or false claims" },
+  { value: "other", label: "Other", description: "Something else needs attention" },
+];
 
 export type CouponType = "percent" | "fixed";
 export interface CouponRedemption {
