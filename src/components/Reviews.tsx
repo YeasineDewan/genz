@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Stars } from "./Stars";
-import { useUser, useProductReviews, addReview, deleteReview } from "@/lib/store";
-import { Trash2 } from "lucide-react";
+import { useUser, useProductReviews, addReview, deleteReview, reportReview } from "@/lib/store";
+import { REPORT_REASONS, type ReportReason } from "@/lib/types";
+import { Trash2, Flag, X } from "lucide-react";
 import { toast } from "sonner";
 
 export function Reviews({ productId }: { productId: string }) {
@@ -11,6 +12,7 @@ export function Reviews({ productId }: { productId: string }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [open, setOpen] = useState(false);
+  const [reportingId, setReportingId] = useState<string | null>(null);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +38,6 @@ export function Reviews({ productId }: { productId: string }) {
     <section className="mx-auto max-w-6xl px-4 pb-16">
       <div className="sticker rounded-2xl bg-white p-6">
         <div className="grid md:grid-cols-[260px_1fr] gap-6">
-          {/* Summary */}
           <div className="border-r-0 md:border-r-[3px] md:pr-6 border-ink/10">
             <div className="text-5xl font-display">{avg.toFixed(1)}</div>
             <Stars value={avg} size={18}/>
@@ -57,7 +58,6 @@ export function Reviews({ productId }: { productId: string }) {
             </button>
           </div>
 
-          {/* Form + list */}
           <div>
             {open && (
               <form onSubmit={submit} className="border-[3px] border-ink rounded-xl p-4 mb-5 bg-pop-yellow/30">
@@ -90,12 +90,18 @@ export function Reviews({ productId }: { productId: string }) {
                           by {r.userName} · {new Date(r.at).toLocaleDateString()}
                         </div>
                       </div>
-                      {user?.id === r.userId && (
-                        <button onClick={() => { deleteReview(r.id); toast.success("Removed"); }}
-                          className="text-muted-foreground hover:text-destructive" aria-label="Delete">
-                          <Trash2 size={14}/>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setReportingId(r.id)}
+                          className="text-muted-foreground hover:text-pop-orange" aria-label="Report">
+                          <Flag size={14}/>
                         </button>
-                      )}
+                        {user?.id === r.userId && (
+                          <button onClick={() => { deleteReview(r.id); toast.success("Removed"); }}
+                            className="text-muted-foreground hover:text-destructive" aria-label="Delete">
+                            <Trash2 size={14}/>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="mt-2 text-sm whitespace-pre-wrap">{r.body}</p>
                   </li>
@@ -105,6 +111,57 @@ export function Reviews({ productId }: { productId: string }) {
           </div>
         </div>
       </div>
+
+      {reportingId && (
+        <ReportModal
+          onClose={() => setReportingId(null)}
+          onSubmit={(reason, note) => {
+            reportReview(reportingId, reason, note, user?.id);
+            setReportingId(null);
+            toast.success("Thanks — our team will take a look.");
+          }}
+        />
+      )}
     </section>
+  );
+}
+
+function ReportModal({ onClose, onSubmit }: {
+  onClose: () => void;
+  onSubmit: (reason: ReportReason, note?: string) => void;
+}) {
+  const [reason, setReason] = useState<ReportReason>("spam");
+  const [note, setNote] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/40 p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md sticker rounded-2xl bg-white p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-2xl flex items-center gap-2"><Flag size={18}/> Report review</h3>
+          <button onClick={onClose} className="h-8 w-8 grid place-items-center rounded-full border-2 border-ink"><X size={14}/></button>
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">Why are you reporting this review?</p>
+        <div className="space-y-2 mb-3">
+          {REPORT_REASONS.map((r) => (
+            <label key={r.value}
+              className={`flex items-start gap-2 p-3 rounded-xl border-2 cursor-pointer transition ${reason === r.value ? "border-ink bg-pop-yellow/40" : "border-ink/20 bg-white hover:border-ink/50"}`}>
+              <input type="radio" name="reason" checked={reason === r.value}
+                onChange={() => setReason(r.value)} className="mt-1"/>
+              <div>
+                <div className="font-bold text-sm">{r.label}</div>
+                <div className="text-xs text-muted-foreground">{r.description}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300}
+          placeholder="Add detail (optional)"
+          className="w-full border-2 border-ink rounded-lg px-3 py-2 bg-white min-h-20 text-sm"/>
+        <div className="flex justify-end gap-2 mt-3">
+          <button onClick={onClose} className="chip">Cancel</button>
+          <button onClick={() => onSubmit(reason, note)} className="btn-pop"><Flag size={14}/> Submit report</button>
+        </div>
+      </div>
+    </div>
   );
 }
