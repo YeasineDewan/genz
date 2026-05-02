@@ -1593,6 +1593,9 @@ function ReviewsModeration() {
                           <span>·</span>
                           <span title={new Date(r.at).toLocaleString()}>{new Date(r.at).toLocaleDateString()}</span>
                         </div>
+                        {reports > 0 && (
+                          <ReportBreakdown reports={r.reportLog ?? []} total={reports}/>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2 shrink-0">
