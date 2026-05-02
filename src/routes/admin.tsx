@@ -9,6 +9,7 @@ import {
   useReviews, setReviewStatus, deleteReview,
 } from "@/lib/store";
 import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
+import { REPORT_REASONS, type ReportReason } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
