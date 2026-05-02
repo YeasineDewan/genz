@@ -1644,3 +1644,51 @@ function Field({ label, error, children }: { label: string; error?: string; chil
     </label>
   );
 }
+
+function ReportBreakdown({ reports, total }: { reports: { reason: ReportReason; note?: string; at: number }[]; total: number }) {
+  const [open, setOpen] = useState(false);
+  const counts = useMemo(() => {
+    const map = new Map<ReportReason, number>();
+    reports.forEach((r) => map.set(r.reason, (map.get(r.reason) ?? 0) + 1));
+    return [...map.entries()].sort((a, b) => b[1] - a[1]);
+  }, [reports]);
+  const labelFor = (v: ReportReason) => REPORT_REASONS.find((x) => x.value === v)?.label ?? v;
+
+  // Legacy reports without a log
+  if (reports.length === 0) {
+    return (
+      <div className="mt-2 text-xs text-muted-foreground italic">
+        {total} report{total === 1 ? "" : "s"} (no reason recorded)
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-xs font-bold uppercase text-destructive">Reports:</span>
+        {counts.map(([reason, n]) => (
+          <span key={reason} className="chip bg-destructive/10 text-destructive border-destructive/40 text-[10px]">
+            <Flag size={10}/> {labelFor(reason)} × {n}
+          </span>
+        ))}
+        {reports.some((r) => r.note) && (
+          <button onClick={() => setOpen((v) => !v)} className="chip text-[10px] bg-pop-yellow">
+            {open ? "Hide notes" : "Show notes"}
+          </button>
+        )}
+      </div>
+      {open && (
+        <ul className="mt-2 space-y-1 text-xs border-l-2 border-destructive/40 pl-3">
+          {reports.filter((r) => r.note).map((r, i) => (
+            <li key={i} className="text-muted-foreground">
+              <span className="font-bold text-ink">{labelFor(r.reason)}:</span> {r.note}
+              <span className="opacity-60"> · {new Date(r.at).toLocaleDateString()}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
