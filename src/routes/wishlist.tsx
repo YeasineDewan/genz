@@ -31,6 +31,7 @@ function Wishlist() {
     const params = new URLSearchParams();
     params.set("ids", items.map((p) => p.id).join(","));
     if (user?.name) params.set("by", user.name);
+    params.set("t", String(Date.now()));
     return `${window.location.origin}/wishlist/share?${params.toString()}`;
   }, [items, user]);
 
