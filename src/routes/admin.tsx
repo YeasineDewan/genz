@@ -720,6 +720,8 @@ function Inventory() {
         <Stat label="Out of stock" value={String(totals.out)} Icon={X as any} bg="bg-destructive" fg="text-white" warn={totals.out > 0}/>
       </div>
 
+      <StockAuditTool products={products}/>
+
       <div className="sticker rounded-2xl bg-white overflow-x-auto">
         <table className="w-full text-sm min-w-[720px]">
           <thead className="bg-pop-yellow border-b-[3px] border-ink">
