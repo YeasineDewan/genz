@@ -110,7 +110,7 @@ export interface Review {
   reportLog?: ReviewReport[];
 }
 
-export const REPORT_REASONS: { value: import("./types").ReportReason; label: string; description: string }[] = [
+export const REPORT_REASONS: { value: ReportReason; label: string; description: string }[] = [
   { value: "spam", label: "Spam", description: "Promotional or repeated content" },
   { value: "offensive", label: "Offensive", description: "Hate speech, harassment, or abuse" },
   { value: "off_topic", label: "Off-topic", description: "Not about this product" },
