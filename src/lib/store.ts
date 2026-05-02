@@ -5,7 +5,7 @@ import { seedProducts } from "./seed";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
-  Review, ReviewStatus, Coupon, CouponRedemption,
+  Review, ReviewStatus, ReportReason, Coupon, CouponRedemption,
 } from "./types";
 
 const KEYS = {
@@ -326,7 +326,7 @@ export const setReviewStatus = (id: string, status: ReviewStatus) => {
 };
 export const reportReview = (
   id: string,
-  reason: import("./types").ReportReason = "other",
+  reason: ReportReason = "other",
   note?: string,
   userId?: string,
 ) => {
