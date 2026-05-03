@@ -357,6 +357,15 @@ export const placeOrder = (
     }
   }
   trackFunnel("order_completed");
+  // Reward loyalty + notify (1 pt per $1)
+  const earned = Math.max(0, Math.round(order.total));
+  if (earned > 0) addLoyaltyPoints(earned);
+  pushNotification({
+    title: `Order #${order.id.slice(0, 8)} placed`,
+    body: `Total ${formatPrice(order.total)} · earned ${earned} pts`,
+    href: `/order/${order.id}`,
+    kind: "order",
+  });
   return order;
 };
 
