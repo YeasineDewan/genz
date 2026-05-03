@@ -127,6 +127,13 @@
     box-shadow: 2px 2px 0 0 var(--ink);
   }
 
+  .input {
+    width: 100%; padding: 0.55rem 0.75rem; border: 2px solid var(--ink);
+    border-radius: 0.75rem; background: white; font: inherit; outline: none;
+    transition: box-shadow 0.15s, transform 0.15s;
+  }
+  .input:focus { box-shadow: 3px 3px 0 0 var(--ink); transform: translate(-1px, -1px); }
+
   .marquee-track { animation: marquee 28s linear infinite; }
 }
 
