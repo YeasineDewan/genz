@@ -625,6 +625,29 @@ export const useWishlist = () => {
 };
 export const useRecent = () => useStore(() => read<string[]>(KEYS.recent, []));
 export const useCoupons = () => useStore(getCoupons);
+export const useNotifications = () => {
+  const u = useUser();
+  return useMemo(() => u?.notifications ?? [], [u]);
+};
+export const useUnreadNotificationCount = () => {
+  const list = useNotifications();
+  return useMemo(() => list.filter((n) => !n.read).length, [list]);
+};
+export const useAddresses = () => {
+  const u = useUser();
+  return useMemo(() => u?.addresses ?? [], [u]);
+};
+export const usePreferences = () => {
+  const u = useUser();
+  return useMemo(() => ({ ...DEFAULT_PREFS, ...(u?.preferences ?? {}) }), [u]);
+};
+export const useLoyalty = () => {
+  const u = useUser();
+  return useMemo(() => {
+    const points = u?.loyaltyPoints ?? 0;
+    return { points, ...getLoyaltyTier(points) };
+  }, [u]);
+};
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
   cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
