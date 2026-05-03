@@ -6,6 +6,7 @@ import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
   Review, ReviewStatus, ReportReason, Coupon, CouponRedemption,
+  Address, UserPreferences, Notification,
 } from "./types";
 
 const KEYS = {
