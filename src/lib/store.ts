@@ -164,6 +164,140 @@ export const signIn = (email: string, password: string): User | { error: string 
 };
 export const signOut = () => write(KEYS.user, null);
 
+// --- Profile / addresses / prefs / notifications / loyalty ---
+const persistUser = (u: User) => {
+  write(KEYS.user, u);
+  const users = read<StoredUser[]>(KEYS.users, []);
+  const i = users.findIndex((x) => x.id === u.id);
+  if (i >= 0) {
+    users[i] = { ...users[i], ...u };
+    write(KEYS.users, users);
+  }
+};
+
+export const updateProfile = (patch: Partial<User>): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const updated: User = { ...cur, ...patch };
+  persistUser(updated);
+  return updated;
+};
+
+export const changePassword = (currentPw: string, newPw: string): { ok: true } | { error: string } => {
+  const cur = getCurrentUser();
+  if (!cur) return { error: "Not signed in" };
+  if (newPw.length < 6) return { error: "New password must be at least 6 characters" };
+  const users = read<StoredUser[]>(KEYS.users, []);
+  const u = users.find((x) => x.id === cur.id);
+  if (!u) return { error: "User not found" };
+  if (u.password !== currentPw) return { error: "Current password is incorrect" };
+  u.password = newPw;
+  write(KEYS.users, users);
+  return { ok: true };
+};
+
+export const getAddresses = (): Address[] => getCurrentUser()?.addresses ?? [];
+
+export const saveAddress = (a: Address): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const list = [...(cur.addresses ?? [])];
+  const i = list.findIndex((x) => x.id === a.id);
+  if (a.isDefault) list.forEach((x) => (x.isDefault = false));
+  if (i >= 0) list[i] = a; else list.push(a);
+  if (list.length === 1) list[0].isDefault = true;
+  return updateProfile({ addresses: list });
+};
+
+export const deleteAddress = (id: string): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const list = (cur.addresses ?? []).filter((a) => a.id !== id);
+  if (list.length > 0 && !list.some((a) => a.isDefault)) list[0].isDefault = true;
+  return updateProfile({ addresses: list });
+};
+
+export const setDefaultAddress = (id: string): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const list = (cur.addresses ?? []).map((a) => ({ ...a, isDefault: a.id === id }));
+  return updateProfile({ addresses: list });
+};
+
+export const getDefaultAddress = (): Address | undefined =>
+  getAddresses().find((a) => a.isDefault) ?? getAddresses()[0];
+
+const DEFAULT_PREFS: UserPreferences = {
+  newsletter: true,
+  orderUpdates: true,
+  promos: false,
+  smsAlerts: false,
+  currency: "USD",
+  language: "en",
+  theme: "system",
+};
+export const getPreferences = (): UserPreferences => ({
+  ...DEFAULT_PREFS,
+  ...(getCurrentUser()?.preferences ?? {}),
+});
+export const updatePreferences = (patch: Partial<UserPreferences>): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  return updateProfile({ preferences: { ...DEFAULT_PREFS, ...(cur.preferences ?? {}), ...patch } });
+};
+
+export const getNotifications = (): Notification[] => getCurrentUser()?.notifications ?? [];
+export const pushNotification = (n: Omit<Notification, "id" | "at"> & { at?: number }): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const list = [
+    { id: crypto.randomUUID(), at: n.at ?? Date.now(), read: false, ...n },
+    ...(cur.notifications ?? []),
+  ].slice(0, 100);
+  return updateProfile({ notifications: list });
+};
+export const markNotificationRead = (id: string, read = true): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  const list = (cur.notifications ?? []).map((n) => (n.id === id ? { ...n, read } : n));
+  return updateProfile({ notifications: list });
+};
+export const markAllNotificationsRead = (): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  return updateProfile({ notifications: (cur.notifications ?? []).map((n) => ({ ...n, read: true })) });
+};
+export const clearNotifications = (): User | null => updateProfile({ notifications: [] });
+
+export const addLoyaltyPoints = (delta: number): User | null => {
+  const cur = getCurrentUser();
+  if (!cur) return null;
+  return updateProfile({ loyaltyPoints: Math.max(0, (cur.loyaltyPoints ?? 0) + delta) });
+};
+
+// Loyalty tier rules
+export type LoyaltyTier = { name: string; min: number; perks: string[]; color: string };
+export const LOYALTY_TIERS: LoyaltyTier[] = [
+  { name: "Starter", min: 0, perks: ["Free shipping over $80"], color: "bg-pop-cyan" },
+  { name: "Hype", min: 200, perks: ["Early drops access", "Birthday gift"], color: "bg-pop-yellow" },
+  { name: "Icon", min: 750, perks: ["10% off everything", "Priority support"], color: "bg-pop-orange" },
+  { name: "Legend", min: 2000, perks: ["Free express shipping", "Exclusive merch"], color: "bg-pop-pink" },
+];
+export const getLoyaltyTier = (points: number): { tier: LoyaltyTier; next?: LoyaltyTier; progress: number } => {
+  const sorted = [...LOYALTY_TIERS].sort((a, b) => a.min - b.min);
+  let tier = sorted[0];
+  let next: LoyaltyTier | undefined;
+  for (let i = 0; i < sorted.length; i++) {
+    if (points >= sorted[i].min) {
+      tier = sorted[i];
+      next = sorted[i + 1];
+    }
+  }
+  const progress = next ? Math.min(100, Math.round(((points - tier.min) / (next.min - tier.min)) * 100)) : 100;
+  return { tier, next, progress };
+};
+
+
 // --- Orders ---
 export const getOrders = (userId?: string): Order[] => {
   const all = read<Order[]>(KEYS.orders, []);
