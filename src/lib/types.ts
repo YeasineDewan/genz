@@ -36,11 +36,52 @@ export interface CartItem {
   qty: number;
 }
 
+export interface Address {
+  id: string;
+  label?: string;        // "Home", "Work"
+  name: string;
+  phone?: string;
+  address: string;
+  city: string;
+  zip: string;
+  country: string;
+  isDefault?: boolean;
+}
+
+export interface UserPreferences {
+  newsletter: boolean;
+  orderUpdates: boolean;
+  promos: boolean;
+  smsAlerts: boolean;
+  currency?: string;
+  language?: string;
+  theme?: "light" | "dark" | "system";
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  body?: string;
+  at: number;
+  read?: boolean;
+  href?: string;
+  kind?: "order" | "promo" | "system" | "review";
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   isAdmin: boolean;
+  phone?: string;
+  avatar?: string;       // data URL or http URL
+  bio?: string;
+  birthday?: string;     // ISO yyyy-mm-dd
+  createdAt?: number;
+  addresses?: Address[];
+  preferences?: UserPreferences;
+  notifications?: Notification[];
+  loyaltyPoints?: number;
 }
 
 export type OrderStatus = "pending" | "processing" | "shipped" | "out_for_delivery" | "delivered" | "cancelled";
