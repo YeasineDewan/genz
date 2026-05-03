@@ -403,6 +403,15 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus, note?: s
     });
     write(KEYS.products, products);
   }
+  const cur = getCurrentUser();
+  if (cur && cur.id === o.userId) {
+    pushNotification({
+      title: `Order #${o.id.slice(0, 8)} ${status.replace(/_/g, " ")}`,
+      body: note,
+      href: `/order/${o.id}`,
+      kind: "order",
+    });
+  }
   return o;
 };
 
