@@ -64,7 +64,7 @@ export function downloadInvoice(order: Order, products: Product[]) {
   y += 16 + Math.max(lines.length, meta.length) * 14 + 20;
 
   // Table header
-  doc.setFillColor(245);
+  doc.setFillColor(245, 245, 245);
   doc.rect(margin, y, W - margin * 2, 24, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
