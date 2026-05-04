@@ -55,7 +55,7 @@ function SharedWishlist() {
     }
     const found = valid
       .map((id: string) => products.find((p: Product) => p.id === id))
-      .filter((p): p is Product => !!p);
+      .filter((p: Product | undefined): p is Product => !!p);
     if (found.length === 0) {
       return { items: [] as Product[], diagnosis: { kind: "all_unknown", total: valid.length } as Diagnosis };
     }
