@@ -103,7 +103,21 @@ export interface Order {
   couponCode?: string;
   status: OrderStatus;
   createdAt: number;
-  shipping: { name: string; address: string; city: string; zip: string; country: string };
+  shipping: {
+    name: string;
+    email?: string;
+    phone: string;
+    address: string;
+    address2?: string;
+    city: string;
+    state?: string;
+    zip: string;
+    country: string;
+    company?: string;
+    notes?: string;
+    deliveryMethod?: "standard" | "express" | "pickup";
+    giftMessage?: string;
+  };
   tracking?: TrackingEvent[];
   trackingNumber?: string;
   carrier?: string;

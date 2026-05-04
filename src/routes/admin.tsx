@@ -604,7 +604,7 @@ function OrderRow({ o }: { o: Order }) {
     }
     updateOrderShipping(
       o.id,
-      { name: draft.name.trim(), address: draft.address.trim(), city: draft.city.trim(), zip: draft.zip.trim(), country: draft.country.trim() },
+      { ...o.shipping, name: draft.name.trim(), address: draft.address.trim(), city: draft.city.trim(), zip: draft.zip.trim(), country: draft.country.trim() },
       draft.trackingNumber.trim(),
       draft.carrier.trim() || undefined,
     );
