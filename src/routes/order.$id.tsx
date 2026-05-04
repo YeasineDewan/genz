@@ -166,17 +166,43 @@ function OrderPage() {
             <h2 className="text-2xl mb-4">Ship to</h2>
             <div className="space-y-1">
               <div className="font-bold text-lg">{order.shipping.name}</div>
-              <div>{order.shipping.address}</div>
-              <div>{order.shipping.city}, {order.shipping.zip}</div>
+              {order.shipping.company && <div className="text-sm">{order.shipping.company}</div>}
+              <div>{order.shipping.address}{order.shipping.address2 ? `, ${order.shipping.address2}` : ""}</div>
+              <div>{order.shipping.city}{order.shipping.state ? `, ${order.shipping.state}` : ""} {order.shipping.zip}</div>
               <div>{order.shipping.country}</div>
+              {(order.shipping.email || order.shipping.phone) && (
+                <div className="mt-3 pt-3 border-t-2 border-ink/20 text-sm space-y-1">
+                  {order.shipping.email && <div className="flex items-center gap-2"><Mail size={14}/> {order.shipping.email}</div>}
+                  {order.shipping.phone && <div className="flex items-center gap-2"><Phone size={14}/> {order.shipping.phone}</div>}
+                </div>
+              )}
             </div>
-            {order.carrier && (
-              <div className="mt-5 pt-4 border-t-2 border-ink/20 text-sm">
-                <div className="font-bold">Carrier</div>
-                <div>{order.carrier}</div>
+            {(order.carrier || order.shipping.deliveryMethod) && (
+              <div className="mt-5 pt-4 border-t-2 border-ink/20 text-sm space-y-1">
+                {order.carrier && <div><span className="font-bold">Carrier:</span> {order.carrier}</div>}
+                {order.shipping.deliveryMethod && <div><span className="font-bold">Method:</span> {order.shipping.deliveryMethod}</div>}
+              </div>
+            )}
+            {order.shipping.giftMessage && (
+              <div className="mt-4 p-3 bg-white rounded-xl border-2 border-ink/20">
+                <div className="text-xs font-bold uppercase">Gift message</div>
+                <div className="text-sm italic mt-1">"{order.shipping.giftMessage}"</div>
               </div>
             )}
           </div>
+        </div>
+
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Link to="/shop" className="btn-pop">Keep shopping</Link>
+          <button onClick={() => downloadInvoice(order, products)} className="btn-pop ghost">
+            <Download size={16}/> Download invoice
+          </button>
+          <Link to="/account" className="btn-pop ghost">My orders</Link>
+          {canCancel && (
+            <button onClick={handleCancel} className="btn-pop bg-destructive text-white">
+              <XCircle size={16}/> Cancel order
+            </button>
+          )}
         </div>
 
         <div className="flex gap-3 justify-center flex-wrap">
