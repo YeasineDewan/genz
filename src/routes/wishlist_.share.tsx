@@ -44,8 +44,8 @@ function SharedWishlist() {
     if (!ids || !ids.trim()) {
       return { items: [], diagnosis: { kind: "missing" } as Diagnosis };
     }
-    const raw = ids.split(",").map((s) => s.trim()).filter(Boolean);
-    const valid = raw.filter((id) => ID_RE.test(id));
+    const raw = ids.split(",").map((s: string) => s.trim()).filter(Boolean);
+    const valid = raw.filter((id: string) => ID_RE.test(id));
     if (raw.length === 0 || valid.length === 0) {
       return { items: [], diagnosis: { kind: "malformed" } as Diagnosis };
     }
@@ -53,7 +53,7 @@ function SharedWishlist() {
       return { items: [], diagnosis: { kind: "expired" } as Diagnosis };
     }
     const found = valid
-      .map((id) => products.find((p) => p.id === id))
+      .map((id: string) => products.find((p) => p.id === id))
       .filter((p): p is NonNullable<typeof p> => !!p);
     if (found.length === 0) {
       return { items: [], diagnosis: { kind: "all_unknown", total: valid.length } as Diagnosis };
