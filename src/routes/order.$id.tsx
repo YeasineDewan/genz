@@ -77,7 +77,14 @@ function OrderPage() {
         {order.status !== "cancelled" && (
           <div className="sticker rounded-2xl bg-white p-6">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-              <h2 className="text-2xl">Tracking</h2>
+              <div>
+                <h2 className="text-2xl">Tracking</h2>
+                {order.status !== "delivered" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Estimated delivery {new Date(order.createdAt + (order.shipping.deliveryMethod === "express" ? 3 : 6) * 86400000).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </p>
+                )}
+              </div>
               {order.trackingNumber && (
                 <button onClick={copyTracking} className="chip">
                   <span className="font-mono">{order.trackingNumber}</span> <Copy size={12}/>
