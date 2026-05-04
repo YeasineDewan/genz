@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { useProducts, addToCart } from "@/lib/store";
+import type { Product } from "@/lib/types";
 import { useMemo } from "react";
 import { Heart, ShoppingBag, Share2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
