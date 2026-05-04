@@ -54,10 +54,10 @@ function SharedWishlist() {
       return { items: [], diagnosis: { kind: "expired" } as Diagnosis };
     }
     const found = valid
-      .map((id: string) => products.find((p) => p.id === id))
-      .filter((p): p is NonNullable<typeof p> => !!p);
+      .map((id: string) => products.find((p: Product) => p.id === id))
+      .filter((p): p is Product => !!p);
     if (found.length === 0) {
-      return { items: [], diagnosis: { kind: "all_unknown", total: valid.length } as Diagnosis };
+      return { items: [] as Product[], diagnosis: { kind: "all_unknown", total: valid.length } as Diagnosis };
     }
     if (found.length < valid.length) {
       return { items: found, diagnosis: { kind: "partial", missing: valid.length - found.length, total: valid.length } as Diagnosis };
@@ -67,7 +67,7 @@ function SharedWishlist() {
 
   const addAll = () => {
     let n = 0;
-    items.forEach((p) => {
+    items.forEach((p: Product) => {
       if (p.stock > 0) {
         addToCart({ productId: p.id, size: p.sizes[0], color: p.colors[0], qty: 1 });
         n++;
