@@ -2,8 +2,9 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { useProducts, formatPrice, useOrder, cancelOrder } from "@/lib/store";
 import type { OrderStatus } from "@/lib/types";
-import { CheckCircle2, Package, Truck, Home, Clock, MapPin, Copy, XCircle } from "lucide-react";
+import { CheckCircle2, Package, Truck, Home, Clock, MapPin, Copy, XCircle, Download, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
+import { downloadInvoice } from "@/lib/invoice";
 
 export const Route = createFileRoute("/order/$id")({
   head: () => ({ meta: [{ title: "Order status — GenZ" }] }),
