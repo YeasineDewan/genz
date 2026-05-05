@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Search, ShoppingBag, User as UserIcon, LogOut, ShieldCheck, Heart, Command } from "lucide-react";
+import { Search, ShoppingBag, User as UserIcon, LogOut, Heart, Command } from "lucide-react";
 import { useEffect, useState } from "react";
 import logo from "@/assets/logo.jpg";
 import { useCart, useUser, signOut, cartCount, useWishlist } from "@/lib/store";
