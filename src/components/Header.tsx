@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Search, ShoppingBag, User as UserIcon, LogOut, ShieldCheck, Heart, Command } from "lucide-react";
+import { Search, ShoppingBag, User as UserIcon, LogOut, Heart, Command } from "lucide-react";
 import { useEffect, useState } from "react";
 import logo from "@/assets/logo.jpg";
 import { useCart, useUser, signOut, cartCount, useWishlist } from "@/lib/store";
@@ -108,13 +108,9 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
                       <div className="font-bold">{user.name}</div>
                       <div className="text-muted-foreground truncate">{user.email}</div>
                     </div>
+                    <Link to="/account" className="block px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm">My account</Link>
                     <Link to="/account" className="block px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm">My orders</Link>
                     <Link to="/wishlist" className="block px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm">Wishlist</Link>
-                    {user.isAdmin && (
-                      <Link to="/admin" className="px-3 py-2 rounded-lg hover:bg-pop-yellow font-semibold text-sm flex items-center gap-2">
-                        <ShieldCheck size={14} /> Admin
-                      </Link>
-                    )}
                     <button onClick={() => { signOut(); setMenu(false); navigate({ to: "/" }); }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-pop-pink hover:text-white font-semibold text-sm flex items-center gap-2">
                       <LogOut size={14} /> Sign out
                     </button>
