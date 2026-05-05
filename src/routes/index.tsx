@@ -67,8 +67,8 @@ function Index() {
   const products = useProducts();
   const featured = products.slice(0, 4);
   const trending = products.slice(4, 8);
-  const newest = [...products].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 4);
-  const bestRated = [...products].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)).slice(0, 4);
+  const newest = products.slice(-4).reverse();
+  const bestRated = products.slice(2, 6);
 
   return (
     <Layout>
