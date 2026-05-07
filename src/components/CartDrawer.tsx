@@ -16,13 +16,10 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   const progress = Math.min(100, (total / FREE_SHIP_THRESHOLD) * 100);
   const itemCount = cart.reduce((n, i) => n + i.qty, 0);
 
-  // Smart cross-sell: pick top-rated products not already in the cart
+  // Smart cross-sell: pick popular products not already in the cart
   const recommendations = useMemo(() => {
     const inCart = new Set(cart.map((c) => c.productId));
-    return products
-      .filter((p) => !inCart.has(p.id))
-      .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-      .slice(0, 4);
+    return products.filter((p) => !inCart.has(p.id) && p.stock > 0).slice(0, 4);
   }, [products, cart]);
 
 
