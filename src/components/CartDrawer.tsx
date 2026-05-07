@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { X, Minus, Plus, Trash2, Truck, Lock, ShieldCheck } from "lucide-react";
+import { X, Minus, Plus, Trash2, Truck, Lock, ShieldCheck, Sparkles, Tag } from "lucide-react";
 import {
-  useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice,
+  useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice, addToCart,
 } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMemo } from "react";
 
 const FREE_SHIP_THRESHOLD = 80;
 
@@ -13,6 +14,14 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   const total = cartTotal(cart, products);
   const remaining = Math.max(0, FREE_SHIP_THRESHOLD - total);
   const progress = Math.min(100, (total / FREE_SHIP_THRESHOLD) * 100);
+  const itemCount = cart.reduce((n, i) => n + i.qty, 0);
+
+  // Smart cross-sell: pick popular products not already in the cart
+  const recommendations = useMemo(() => {
+    const inCart = new Set(cart.map((c) => c.productId));
+    return products.filter((p) => !inCart.has(p.id) && p.stock > 0).slice(0, 4);
+  }, [products, cart]);
+
 
   return (
     <AnimatePresence>
@@ -30,7 +39,12 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
           >
             <div className="p-4 border-b-[3px] border-ink bg-pop-yellow space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl">Your Bag</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-2xl">Your Bag</h3>
+                  {itemCount > 0 && (
+                    <span className="chip bg-white text-xs">{itemCount} item{itemCount === 1 ? "" : "s"}</span>
+                  )}
+                </div>
                 <button
                   onClick={onClose}
                   className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white hover:rotate-90 transition-transform"
@@ -110,6 +124,43 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
                   );
                 })}
               </AnimatePresence>
+
+              {cart.length > 0 && recommendations.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="pt-3 mt-3 border-t-2 border-dashed border-ink/20"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles size={14} className="text-pop-pink"/>
+                    <h4 className="font-bold text-sm uppercase tracking-wide">You may also like</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {recommendations.map((p) => (
+                      <motion.div
+                        key={p.id}
+                        whileHover={{ y: -2 }}
+                        className="rounded-xl border-2 border-ink bg-white p-2 text-xs"
+                      >
+                        <Link to="/product/$slug" params={{ slug: p.slug }} onClick={onClose}>
+                          <img src={p.image} alt={p.name} className="w-full h-20 object-cover rounded-lg border border-ink/40 mb-1" loading="lazy"/>
+                          <div className="font-bold truncate">{p.name}</div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="font-display">{formatPrice(p.price)}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation();
+                                addToCart({ productId: p.id, size: p.sizes[0] ?? "OS", color: p.colors[0] ?? "default", qty: 1 });
+                              }}
+                              className="h-6 w-6 grid place-items-center rounded-full border-2 border-ink bg-pop-yellow hover:bg-pop-pink hover:text-white transition"
+                              aria-label="Add"
+                            ><Plus size={12}/></button>
+                          </div>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
             </div>
 
             {cart.length > 0 && (
@@ -124,6 +175,9 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
                     {formatPrice(total)}
                   </motion.span>
                 </div>
+                <Link to="/cart" onClick={onClose} className="text-xs flex items-center gap-1 text-pop-pink font-bold hover:underline">
+                  <Tag size={12}/> Got a coupon? Apply at checkout
+                </Link>
                 <p className="text-xs text-muted-foreground">Shipping & taxes calculated at checkout.</p>
                 <Link to="/checkout" onClick={onClose} className="btn-pop w-full justify-center">
                   <Lock size={14}/> Secure checkout →

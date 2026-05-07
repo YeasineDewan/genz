@@ -97,18 +97,42 @@ function Checkout() {
   const couponResult = applied ? validateCoupon(applied, subtotal) : null;
   const discount = couponResult?.ok ? couponResult.discount : 0;
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [delivery, setDelivery] = useState<Delivery>("standard");
-  const [contact, setContact] = useState({ email: user?.email ?? "", phone: user?.phone ?? "" });
-  const [ship, setShip] = useState({
+  // Persisted draft (excludes card data)
+  const DRAFT_KEY = "genz:checkout-draft:v1";
+  const initialShip = {
     name: user?.name ?? "", company: "", address: "", address2: "",
     city: "", state: "", zip: "", country: "USA",
     notes: "", giftMessage: "",
-  });
+  };
+  type Draft = {
+    step: 1 | 2 | 3; delivery: Delivery;
+    contact: { email: string; phone: string };
+    ship: typeof initialShip;
+  };
+  const loadDraft = (): Draft | null => {
+    if (typeof window === "undefined") return null;
+    try { const raw = localStorage.getItem(DRAFT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  };
+  const draft = loadDraft();
+
+  const [step, setStep] = useState<1 | 2 | 3>(draft?.step ?? 1);
+  const [delivery, setDelivery] = useState<Delivery>(draft?.delivery ?? "standard");
+  const [contact, setContact] = useState(draft?.contact ?? { email: user?.email ?? "", phone: user?.phone ?? "" });
+  const [ship, setShip] = useState(draft?.ship ?? initialShip);
   const [card, setCard] = useState({ number: "", exp: "", cvc: "", name: "" });
   const [agree, setAgree] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, delivery, contact, ship })); } catch {}
+  }, [step, delivery, contact, ship]);
+
+  const clearError = (k: string) => setErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+  const setContactField = (k: keyof typeof contact, v: string) => { setContact({ ...contact, [k]: v }); clearError(k); };
+  const setShipField = (k: keyof typeof ship, v: string) => { setShip({ ...ship, [k]: v }); clearError(k); };
+  const setCardField = (k: keyof typeof card, v: string, errKey?: string) => { setCard({ ...card, [k]: v }); if (errKey) clearError(errKey); };
 
   const shippingFee = useMemo(() => {
     const def = DELIVERY.find((d) => d.id === delivery)!;
@@ -137,7 +161,7 @@ function Checkout() {
     );
   }
 
-  const validate = (next: 1 | 2 | 3) => {
+  const validate = (next: 1 | 2 | 3): { ok: boolean; errs: Record<string, string> } => {
     const errs: Record<string, string> = {};
     if (next >= 2) {
       const r = contactSchema.safeParse(contact);
@@ -148,11 +172,11 @@ function Checkout() {
       if (!r.success) r.error.issues.forEach((i) => { errs[i.path[0] as string] = i.message; });
     }
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+    return { ok: Object.keys(errs).length === 0, errs };
   };
 
   const goto = (s: 1 | 2 | 3) => {
-    if (s > step && !validate(s as 2 | 3)) {
+    if (s > step && !validate(s as 2 | 3).ok) {
       toast.error("Please fix the highlighted fields");
       return;
     }
@@ -181,9 +205,10 @@ function Checkout() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate(3)) {
+    const v = validate(3);
+    if (!v.ok) {
       toast.error("Please complete required fields");
-      setStep(errors.email || errors.phone ? 1 : 2);
+      setStep(v.errs.email || v.errs.phone ? 1 : 2);
       return;
     }
     if (!validateCard()) {
@@ -222,6 +247,7 @@ function Checkout() {
       });
       clearCart();
       setAppliedCoupon(null);
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
       setLoading(false);
       toast.success("Order placed! 🎉");
       navigate({ to: "/order/$id", params: { id: order.id } });
@@ -291,12 +317,12 @@ function Checkout() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <Field id="email" label="Email" required icon={Mail} type="email" autoComplete="email"
                       value={contact.email}
-                      onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                      onChange={(e) => setContactField("email", e.target.value)}
                       error={errors.email}
                     />
                     <Field id="phone" label="Phone" required icon={Phone} type="tel" autoComplete="tel"
                       value={contact.phone}
-                      onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                      onChange={(e) => setContactField("phone", e.target.value)}
                       error={errors.phone}
                     />
                   </div>
@@ -330,42 +356,42 @@ function Checkout() {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <Field id="name" label="Full name" required icon={User} autoComplete="name"
                         value={ship.name}
-                        onChange={(e) => setShip({ ...ship, name: e.target.value })}
+                        onChange={(e) => setShipField("name", e.target.value)}
                         error={errors.name}
                       />
                       <Field id="company" label="Company" icon={Building2} autoComplete="organization"
                         value={ship.company}
-                        onChange={(e) => setShip({ ...ship, company: e.target.value })}
+                        onChange={(e) => setShipField("company", e.target.value)}
                       />
                     </div>
                     <Field id="address" label="Street address" required icon={MapPin} autoComplete="address-line1"
                       value={ship.address}
-                      onChange={(e) => setShip({ ...ship, address: e.target.value })}
+                      onChange={(e) => setShipField("address", e.target.value)}
                       error={errors.address}
                     />
                     <Field id="address2" label="Apt / Suite" autoComplete="address-line2"
                       value={ship.address2}
-                      onChange={(e) => setShip({ ...ship, address2: e.target.value })}
+                      onChange={(e) => setShipField("address2", e.target.value)}
                     />
                     <div className="grid sm:grid-cols-3 gap-4">
                       <Field id="city" label="City" required autoComplete="address-level2"
                         value={ship.city}
-                        onChange={(e) => setShip({ ...ship, city: e.target.value })}
+                        onChange={(e) => setShipField("city", e.target.value)}
                         error={errors.city}
                       />
                       <Field id="state" label="State / Region" autoComplete="address-level1"
                         value={ship.state}
-                        onChange={(e) => setShip({ ...ship, state: e.target.value })}
+                        onChange={(e) => setShipField("state", e.target.value)}
                       />
                       <Field id="zip" label="ZIP / Postal" required autoComplete="postal-code"
                         value={ship.zip}
-                        onChange={(e) => setShip({ ...ship, zip: e.target.value })}
+                        onChange={(e) => setShipField("zip", e.target.value)}
                         error={errors.zip}
                       />
                     </div>
                     <Field id="country" label="Country" required autoComplete="country-name"
                       value={ship.country}
-                      onChange={(e) => setShip({ ...ship, country: e.target.value })}
+                      onChange={(e) => setShipField("country", e.target.value)}
                       error={errors.country}
                     />
 
@@ -457,24 +483,24 @@ function Checkout() {
                     </div>
                     <Field id="cardname" label="Name on card" required autoComplete="cc-name"
                       value={card.name}
-                      onChange={(e) => setCard({ ...card, name: e.target.value })}
+                      onChange={(e) => setCardField("name", e.target.value, "cardname")}
                       error={errors.cardname}
                     />
                     <Field id="cardnum" label="Card number" required inputMode="numeric" autoComplete="cc-number"
                       placeholder="1234 5678 9012 3456"
                       value={card.number}
-                      onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
+                      onChange={(e) => setCardField("number", formatCardNumber(e.target.value), "cardnum")}
                       error={errors.cardnum}
                     />
                     <div className="grid grid-cols-2 gap-4">
                       <Field id="exp" label="Expiry" required placeholder="MM/YY" autoComplete="cc-exp" inputMode="numeric"
                         value={card.exp}
-                        onChange={(e) => setCard({ ...card, exp: formatExp(e.target.value) })}
+                        onChange={(e) => setCardField("exp", formatExp(e.target.value), "exp")}
                         error={errors.exp}
                       />
                       <Field id="cvc" label="CVC" required inputMode="numeric" autoComplete="cc-csc" placeholder="123"
                         value={card.cvc}
-                        onChange={(e) => setCard({ ...card, cvc: formatCvc(e.target.value) })}
+                        onChange={(e) => setCardField("cvc", formatCvc(e.target.value), "cvc")}
                         error={errors.cvc}
                       />
                     </div>

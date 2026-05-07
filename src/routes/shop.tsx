@@ -5,6 +5,7 @@ import { QuickViewModal } from "@/components/QuickViewModal";
 import { useProducts } from "@/lib/store";
 import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 type ShopSearch = { category?: Category | "all"; q?: string; sort?: "new" | "price-asc" | "price-desc" };
 
@@ -54,10 +55,19 @@ function Shop() {
   return (
     <Layout>
       <section className="mx-auto max-w-7xl px-4 py-10">
-        <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-end justify-between flex-wrap gap-4 mb-8"
+        >
           <div>
             <h1 className="text-5xl">The Shop</h1>
-            <p className="text-muted-foreground mt-1">{filtered.length} items{search.q ? ` matching "${search.q}"` : ""}</p>
+            <motion.p
+              key={`${filtered.length}-${search.q ?? ""}`}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+              className="text-muted-foreground mt-1"
+            >
+              {filtered.length} items{search.q ? ` matching "${search.q}"` : ""}
+            </motion.p>
           </div>
           <select
             value={search.sort}
@@ -68,38 +78,82 @@ function Shop() {
             <option value="price-asc">Price: low → high</option>
             <option value="price-desc">Price: high → low</option>
           </select>
-        </div>
+        </motion.div>
 
-        <div className="flex flex-wrap gap-2 mb-8">
-          {cats.map((c) => {
-            const active = (search.category ?? "all") === c.value;
-            return (
-              <button
-                key={c.value}
-                onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, category: c.value }) })}
-                className={`chip ${active ? "bg-pop-pink text-white" : ""}`}
+        <LayoutGroup>
+          <motion.div layout className="flex flex-wrap gap-2 mb-8">
+            {cats.map((c) => {
+              const active = (search.category ?? "all") === c.value;
+              return (
+                <motion.button
+                  key={c.value}
+                  layout
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, category: c.value }) })}
+                  className={`chip relative ${active ? "bg-pop-pink text-white" : ""}`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="cat-pill"
+                      className="absolute inset-0 rounded-full bg-pop-pink -z-10"
+                      transition={{ type: "spring", stiffness: 360, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative">{c.label}</span>
+                </motion.button>
+              );
+            })}
+            {search.q && (
+              <motion.button
+                layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, q: "" }) })}
+                className="chip bg-ink text-paper"
               >
-                {c.label}
-              </button>
-            );
-          })}
-          {search.q && (
-            <button onClick={() => navigate({ search: (s: ShopSearch) => ({ ...s, q: "" }) })} className="chip bg-ink text-paper">
-              clear "{search.q}" ✕
-            </button>
-          )}
-        </div>
+                clear "{search.q}" ✕
+              </motion.button>
+            )}
+          </motion.div>
 
-        {filtered.length === 0 ? (
-          <div className="text-center py-24">
-            <div className="text-6xl mb-3">🫥</div>
-            <p className="font-bold text-lg">Nothing here. Try another vibe.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {filtered.map((p, i) => <ProductCard key={p.id} product={p} index={i} onQuickView={setQuickView}/>)}
-          </div>
-        )}
+          <AnimatePresence mode="wait">
+            {filtered.length === 0 ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                className="text-center py-24"
+              >
+                <motion.div
+                  animate={{ rotate: [0, -10, 10, -5, 0] }}
+                  transition={{ duration: 1.2, repeat: Infinity, repeatDelay: 1 }}
+                  className="text-6xl mb-3"
+                >🫥</motion.div>
+                <p className="font-bold text-lg">Nothing here. Try another vibe.</p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={`${search.category}-${search.sort}-${search.q}`}
+                layout
+                initial="hidden"
+                animate="show"
+                variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+              >
+                {filtered.map((p, i) => (
+                  <motion.div
+                    key={p.id}
+                    layout
+                    variants={{
+                      hidden: { opacity: 0, y: 20, scale: 0.95 },
+                      show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 220, damping: 24 } },
+                    }}
+                  >
+                    <ProductCard product={p} index={i} onQuickView={setQuickView}/>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </LayoutGroup>
       </section>
       <QuickViewModal product={quickView} onClose={() => setQuickView(null)}/>
     </Layout>
