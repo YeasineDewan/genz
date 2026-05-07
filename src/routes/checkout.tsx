@@ -316,12 +316,12 @@ function Checkout() {
                   <div className="grid sm:grid-cols-2 gap-4">
                     <Field id="email" label="Email" required icon={Mail} type="email" autoComplete="email"
                       value={contact.email}
-                      onChange={(e) => setContact({ ...contact, email: e.target.value })}
+                      onChange={(e) => setContactField("email", e.target.value)}
                       error={errors.email}
                     />
                     <Field id="phone" label="Phone" required icon={Phone} type="tel" autoComplete="tel"
                       value={contact.phone}
-                      onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                      onChange={(e) => setContactField("phone", e.target.value)}
                       error={errors.phone}
                     />
                   </div>
@@ -355,42 +355,42 @@ function Checkout() {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <Field id="name" label="Full name" required icon={User} autoComplete="name"
                         value={ship.name}
-                        onChange={(e) => setShip({ ...ship, name: e.target.value })}
+                        onChange={(e) => setShipField("name", e.target.value)}
                         error={errors.name}
                       />
                       <Field id="company" label="Company" icon={Building2} autoComplete="organization"
                         value={ship.company}
-                        onChange={(e) => setShip({ ...ship, company: e.target.value })}
+                        onChange={(e) => setShipField("company", e.target.value)}
                       />
                     </div>
                     <Field id="address" label="Street address" required icon={MapPin} autoComplete="address-line1"
                       value={ship.address}
-                      onChange={(e) => setShip({ ...ship, address: e.target.value })}
+                      onChange={(e) => setShipField("address", e.target.value)}
                       error={errors.address}
                     />
                     <Field id="address2" label="Apt / Suite" autoComplete="address-line2"
                       value={ship.address2}
-                      onChange={(e) => setShip({ ...ship, address2: e.target.value })}
+                      onChange={(e) => setShipField("address2", e.target.value)}
                     />
                     <div className="grid sm:grid-cols-3 gap-4">
                       <Field id="city" label="City" required autoComplete="address-level2"
                         value={ship.city}
-                        onChange={(e) => setShip({ ...ship, city: e.target.value })}
+                        onChange={(e) => setShipField("city", e.target.value)}
                         error={errors.city}
                       />
                       <Field id="state" label="State / Region" autoComplete="address-level1"
                         value={ship.state}
-                        onChange={(e) => setShip({ ...ship, state: e.target.value })}
+                        onChange={(e) => setShipField("state", e.target.value)}
                       />
                       <Field id="zip" label="ZIP / Postal" required autoComplete="postal-code"
                         value={ship.zip}
-                        onChange={(e) => setShip({ ...ship, zip: e.target.value })}
+                        onChange={(e) => setShipField("zip", e.target.value)}
                         error={errors.zip}
                       />
                     </div>
                     <Field id="country" label="Country" required autoComplete="country-name"
                       value={ship.country}
-                      onChange={(e) => setShip({ ...ship, country: e.target.value })}
+                      onChange={(e) => setShipField("country", e.target.value)}
                       error={errors.country}
                     />
 
@@ -482,24 +482,24 @@ function Checkout() {
                     </div>
                     <Field id="cardname" label="Name on card" required autoComplete="cc-name"
                       value={card.name}
-                      onChange={(e) => setCard({ ...card, name: e.target.value })}
+                      onChange={(e) => setCardField("name", e.target.value, "cardname")}
                       error={errors.cardname}
                     />
                     <Field id="cardnum" label="Card number" required inputMode="numeric" autoComplete="cc-number"
                       placeholder="1234 5678 9012 3456"
                       value={card.number}
-                      onChange={(e) => setCard({ ...card, number: formatCardNumber(e.target.value) })}
+                      onChange={(e) => setCardField("number", formatCardNumber(e.target.value), "cardnum")}
                       error={errors.cardnum}
                     />
                     <div className="grid grid-cols-2 gap-4">
                       <Field id="exp" label="Expiry" required placeholder="MM/YY" autoComplete="cc-exp" inputMode="numeric"
                         value={card.exp}
-                        onChange={(e) => setCard({ ...card, exp: formatExp(e.target.value) })}
+                        onChange={(e) => setCardField("exp", formatExp(e.target.value), "exp")}
                         error={errors.exp}
                       />
                       <Field id="cvc" label="CVC" required inputMode="numeric" autoComplete="cc-csc" placeholder="123"
                         value={card.cvc}
-                        onChange={(e) => setCard({ ...card, cvc: formatCvc(e.target.value) })}
+                        onChange={(e) => setCardField("cvc", formatCvc(e.target.value), "cvc")}
                         error={errors.cvc}
                       />
                     </div>
