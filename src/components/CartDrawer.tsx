@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { X, Minus, Plus, Trash2, Truck, Lock, ShieldCheck } from "lucide-react";
+import { X, Minus, Plus, Trash2, Truck, Lock, ShieldCheck, Sparkles, Tag } from "lucide-react";
 import {
-  useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice,
+  useCart, useProducts, removeFromCart, updateCartQty, cartTotal, formatPrice, addToCart,
 } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
+import { useMemo } from "react";
 
 const FREE_SHIP_THRESHOLD = 80;
 
