@@ -39,7 +39,12 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
           >
             <div className="p-4 border-b-[3px] border-ink bg-pop-yellow space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-2xl">Your Bag</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-2xl">Your Bag</h3>
+                  {itemCount > 0 && (
+                    <span className="chip bg-white text-xs">{itemCount} item{itemCount === 1 ? "" : "s"}</span>
+                  )}
+                </div>
                 <button
                   onClick={onClose}
                   className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white hover:rotate-90 transition-transform"
