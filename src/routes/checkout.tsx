@@ -161,7 +161,7 @@ function Checkout() {
     );
   }
 
-  const validate = (next: 1 | 2 | 3) => {
+  const validate = (next: 1 | 2 | 3): { ok: boolean; errs: Record<string, string> } => {
     const errs: Record<string, string> = {};
     if (next >= 2) {
       const r = contactSchema.safeParse(contact);
