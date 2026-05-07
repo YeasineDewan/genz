@@ -97,18 +97,40 @@ function Checkout() {
   const couponResult = applied ? validateCoupon(applied, subtotal) : null;
   const discount = couponResult?.ok ? couponResult.discount : 0;
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [delivery, setDelivery] = useState<Delivery>("standard");
-  const [contact, setContact] = useState({ email: user?.email ?? "", phone: user?.phone ?? "" });
-  const [ship, setShip] = useState({
+  // Persisted draft
+  const DRAFT_KEY = "genz:checkout-draft:v1";
+  type Draft = {
+    step: 1 | 2 | 3; delivery: Delivery;
+    contact: { email: string; phone: string };
+    ship: typeof initialShip;
+  };
+  const initialShip = {
     name: user?.name ?? "", company: "", address: "", address2: "",
     city: "", state: "", zip: "", country: "USA",
     notes: "", giftMessage: "",
-  });
+  };
+  const loadDraft = (): Draft | null => {
+    if (typeof window === "undefined") return null;
+    try { const raw = localStorage.getItem(DRAFT_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+  };
+  const draft = loadDraft();
+
+  const [step, setStep] = useState<1 | 2 | 3>(draft?.step ?? 1);
+  const [delivery, setDelivery] = useState<Delivery>(draft?.delivery ?? "standard");
+  const [contact, setContact] = useState(draft?.contact ?? { email: user?.email ?? "", phone: user?.phone ?? "" });
+  const [ship, setShip] = useState(draft?.ship ?? initialShip);
   const [card, setCard] = useState({ number: "", exp: "", cvc: "", name: "" });
   const [agree, setAgree] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  // Persist non-sensitive draft (never card data)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, delivery, contact, ship }));
+    } catch { /* ignore */ }
+  }, [step, delivery, contact, ship]);
 
   const shippingFee = useMemo(() => {
     const def = DELIVERY.find((d) => d.id === delivery)!;
