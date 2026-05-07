@@ -241,6 +241,7 @@ function Checkout() {
       });
       clearCart();
       setAppliedCoupon(null);
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
       setLoading(false);
       toast.success("Order placed! 🎉");
       navigate({ to: "/order/$id", params: { id: order.id } });
