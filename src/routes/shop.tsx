@@ -5,6 +5,7 @@ import { QuickViewModal } from "@/components/QuickViewModal";
 import { useProducts } from "@/lib/store";
 import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
 type ShopSearch = { category?: Category | "all"; q?: string; sort?: "new" | "price-asc" | "price-desc" };
 
