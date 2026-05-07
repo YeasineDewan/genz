@@ -172,11 +172,11 @@ function Checkout() {
       if (!r.success) r.error.issues.forEach((i) => { errs[i.path[0] as string] = i.message; });
     }
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+    return { ok: Object.keys(errs).length === 0, errs };
   };
 
   const goto = (s: 1 | 2 | 3) => {
-    if (s > step && !validate(s as 2 | 3)) {
+    if (s > step && !validate(s as 2 | 3).ok) {
       toast.error("Please fix the highlighted fields");
       return;
     }
@@ -205,9 +205,10 @@ function Checkout() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate(3)) {
+    const v = validate(3);
+    if (!v.ok) {
       toast.error("Please complete required fields");
-      setStep(errors.email || errors.phone ? 1 : 2);
+      setStep(v.errs.email || v.errs.phone ? 1 : 2);
       return;
     }
     if (!validateCard()) {
