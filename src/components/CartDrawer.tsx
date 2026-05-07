@@ -175,6 +175,9 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
                     {formatPrice(total)}
                   </motion.span>
                 </div>
+                <Link to="/cart" onClick={onClose} className="text-xs flex items-center gap-1 text-pop-pink font-bold hover:underline">
+                  <Tag size={12}/> Got a coupon? Apply at checkout
+                </Link>
                 <p className="text-xs text-muted-foreground">Shipping & taxes calculated at checkout.</p>
                 <Link to="/checkout" onClick={onClose} className="btn-pop w-full justify-center">
                   <Lock size={14}/> Secure checkout →
