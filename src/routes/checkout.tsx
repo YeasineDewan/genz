@@ -97,17 +97,17 @@ function Checkout() {
   const couponResult = applied ? validateCoupon(applied, subtotal) : null;
   const discount = couponResult?.ok ? couponResult.discount : 0;
 
-  // Persisted draft
+  // Persisted draft (excludes card data)
   const DRAFT_KEY = "genz:checkout-draft:v1";
-  type Draft = {
-    step: 1 | 2 | 3; delivery: Delivery;
-    contact: { email: string; phone: string };
-    ship: typeof initialShip;
-  };
   const initialShip = {
     name: user?.name ?? "", company: "", address: "", address2: "",
     city: "", state: "", zip: "", country: "USA",
     notes: "", giftMessage: "",
+  };
+  type Draft = {
+    step: 1 | 2 | 3; delivery: Delivery;
+    contact: { email: string; phone: string };
+    ship: typeof initialShip;
   };
   const loadDraft = (): Draft | null => {
     if (typeof window === "undefined") return null;
@@ -124,12 +124,9 @@ function Checkout() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
-  // Persist non-sensitive draft (never card data)
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, delivery, contact, ship }));
-    } catch { /* ignore */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, delivery, contact, ship })); } catch {}
   }, [step, delivery, contact, ship]);
 
   const shippingFee = useMemo(() => {
