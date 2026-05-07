@@ -119,6 +119,43 @@ export function CartDrawer({ open, onClose }: { open: boolean; onClose: () => vo
                   );
                 })}
               </AnimatePresence>
+
+              {cart.length > 0 && recommendations.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                  className="pt-3 mt-3 border-t-2 border-dashed border-ink/20"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles size={14} className="text-pop-pink"/>
+                    <h4 className="font-bold text-sm uppercase tracking-wide">You may also like</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {recommendations.map((p) => (
+                      <motion.div
+                        key={p.id}
+                        whileHover={{ y: -2 }}
+                        className="rounded-xl border-2 border-ink bg-white p-2 text-xs"
+                      >
+                        <Link to="/product/$slug" params={{ slug: p.slug }} onClick={onClose}>
+                          <img src={p.image} alt={p.name} className="w-full h-20 object-cover rounded-lg border border-ink/40 mb-1" loading="lazy"/>
+                          <div className="font-bold truncate">{p.name}</div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="font-display">{formatPrice(p.price)}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation();
+                                addToCart({ productId: p.id, size: p.sizes[0] ?? "OS", color: p.colors[0] ?? "default", qty: 1 });
+                              }}
+                              className="h-6 w-6 grid place-items-center rounded-full border-2 border-ink bg-pop-yellow hover:bg-pop-pink hover:text-white transition"
+                              aria-label="Add"
+                            ><Plus size={12}/></button>
+                          </div>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
             </div>
 
             {cart.length > 0 && (
