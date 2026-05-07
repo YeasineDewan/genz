@@ -129,6 +129,11 @@ function Checkout() {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ step, delivery, contact, ship })); } catch {}
   }, [step, delivery, contact, ship]);
 
+  const clearError = (k: string) => setErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+  const setContactField = (k: keyof typeof contact, v: string) => { setContact({ ...contact, [k]: v }); clearError(k); };
+  const setShipField = (k: keyof typeof ship, v: string) => { setShip({ ...ship, [k]: v }); clearError(k); };
+  const setCardField = (k: keyof typeof card, v: string, errKey?: string) => { setCard({ ...card, [k]: v }); if (errKey) clearError(errKey); };
+
   const shippingFee = useMemo(() => {
     const def = DELIVERY.find((d) => d.id === delivery)!;
     return def.price(subtotal);
