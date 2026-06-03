@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import {
   useProducts, useUser, saveProduct, deleteProduct, formatPrice,
@@ -7,7 +7,9 @@ import {
   useFunnelEvents, useStockAudit,
   useCoupons, saveCoupon, deleteCoupon,
   useReviews, setReviewStatus, deleteReview,
+  signOut, getSession,
 } from "@/lib/store";
+import { useRequireAuth } from "@/lib/auth-guard";
 import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
 import { REPORT_REASONS, type ReportReason } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
