@@ -23,7 +23,17 @@ const KEYS = {
   recent: "genz.recent",
   coupons: "genz.coupons",
   appliedCoupon: "genz.appliedCoupon",
+  session: "genz.session",
+  resetTokens: "genz.resetTokens",
 } as const;
+
+// Session timeouts (ms)
+export const SESSION_MS_DEFAULT = 60 * 60 * 1000;          // 1h
+export const SESSION_MS_REMEMBER = 30 * 24 * 60 * 60 * 1000; // 30d
+export const RESET_TOKEN_MS = 30 * 60 * 1000;              // 30min
+
+interface SessionRecord { userId: string; expiresAt: number; remember: boolean; }
+interface ResetTokenRecord { userId: string; expiresAt: number; }
 
 export const defaultCategories: CategoryDef[] = [
   { id: "c-tops", slug: "tops", name: "Tops", emoji: "👕" },
