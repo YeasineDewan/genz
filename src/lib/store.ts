@@ -153,8 +153,37 @@ export const clearCart = () => setCart([]);
 
 // --- Auth ---
 type StoredUser = User & { password: string };
-export const getCurrentUser = (): User | null => read(KEYS.user, null);
-export const signUp = (email: string, password: string, name: string): User | { error: string } => {
+
+const startSession = (userId: string, remember: boolean) => {
+  const expiresAt = Date.now() + (remember ? SESSION_MS_REMEMBER : SESSION_MS_DEFAULT);
+  write<SessionRecord>(KEYS.session, { userId, expiresAt, remember });
+};
+
+const clearSession = () => {
+  write(KEYS.session, null);
+  write(KEYS.user, null);
+};
+
+export const getSession = (): SessionRecord | null => {
+  const s = read<SessionRecord | null>(KEYS.session, null);
+  if (!s) return null;
+  if (Date.now() > s.expiresAt) { clearSession(); return null; }
+  return s;
+};
+
+export const getCurrentUser = (): User | null => {
+  const u = read<User | null>(KEYS.user, null);
+  if (!u) return null;
+  const s = read<SessionRecord | null>(KEYS.session, null);
+  // Back-compat: pre-existing users without a session get one started silently.
+  if (!s) { startSession(u.id, false); return u; }
+  if (Date.now() > s.expiresAt) { clearSession(); return null; }
+  return u;
+};
+
+export const signUp = (
+  email: string, password: string, name: string, remember = false,
+): User | { error: string } => {
   const users = read<StoredUser[]>(KEYS.users, []);
   if (users.some((u) => u.email === email)) return { error: "Email already used" };
   const u: StoredUser = { id: crypto.randomUUID(), email, password, name, isAdmin: false };
@@ -162,17 +191,60 @@ export const signUp = (email: string, password: string, name: string): User | { 
   write(KEYS.users, users);
   const { password: _, ...pub } = u;
   write(KEYS.user, pub);
+  startSession(pub.id, remember);
   return pub;
 };
-export const signIn = (email: string, password: string): User | { error: string } => {
+export const signIn = (
+  email: string, password: string, remember = false,
+): User | { error: string } => {
   const users = read<StoredUser[]>(KEYS.users, []);
   const u = users.find((x) => x.email === email && x.password === password);
   if (!u) return { error: "Invalid credentials" };
   const { password: _, ...pub } = u;
   write(KEYS.user, pub);
+  startSession(pub.id, remember);
   return pub;
 };
-export const signOut = () => write(KEYS.user, null);
+export const signOut = () => clearSession();
+
+// --- Password reset (token-based; no email backend, token is returned to caller) ---
+export const requestPasswordReset = (email: string): { token: string; expiresAt: number } | { error: string } => {
+  const users = read<StoredUser[]>(KEYS.users, []);
+  const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+  if (!u) return { error: "No account with that email" };
+  const token = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+  const expiresAt = Date.now() + RESET_TOKEN_MS;
+  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
+  tokens[token] = { userId: u.id, expiresAt };
+  write(KEYS.resetTokens, tokens);
+  return { token, expiresAt };
+};
+
+export const verifyResetToken = (token: string): { ok: true; email: string } | { error: string } => {
+  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
+  const t = tokens[token];
+  if (!t) return { error: "Invalid or expired token" };
+  if (Date.now() > t.expiresAt) return { error: "Token expired" };
+  const users = read<StoredUser[]>(KEYS.users, []);
+  const u = users.find((x) => x.id === t.userId);
+  if (!u) return { error: "User not found" };
+  return { ok: true, email: u.email };
+};
+
+export const resetPasswordWithToken = (token: string, newPw: string): { ok: true } | { error: string } => {
+  if (newPw.length < 6) return { error: "Password must be at least 6 characters" };
+  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
+  const t = tokens[token];
+  if (!t || Date.now() > t.expiresAt) return { error: "Invalid or expired token" };
+  const users = read<StoredUser[]>(KEYS.users, []);
+  const u = users.find((x) => x.id === t.userId);
+  if (!u) return { error: "User not found" };
+  u.password = newPw;
+  write(KEYS.users, users);
+  delete tokens[token];
+  write(KEYS.resetTokens, tokens);
+  return { ok: true };
+};
 
 // --- Profile / addresses / prefs / notifications / loyalty ---
 const persistUser = (u: User) => {
