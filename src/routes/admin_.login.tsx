@@ -21,6 +21,7 @@ function AdminLogin() {
   const search = useSearch({ from: "/admin/login" }) as Search;
   const user = useUser();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [remember, setRemember] = useState(false);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +36,7 @@ function AdminLogin() {
     if (!form.email || !form.password) return toast.error("Email and password required");
     setBusy(true);
     setTimeout(() => {
-      const r = signIn(form.email.trim(), form.password);
+      const r = signIn(form.email.trim(), form.password, remember);
       setBusy(false);
       if ("error" in r) return toast.error(r.error);
       if (!r.isAdmin) return toast.error("This account doesn't have admin access");
