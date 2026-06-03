@@ -21,6 +21,7 @@ function Login() {
   const search = useSearch({ from: "/login" }) as LoginSearch;
   const user = useUser();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [remember, setRemember] = useState(true);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -36,7 +37,7 @@ function Login() {
     if (!form.email || !form.password) return toast.error("Email and password required");
     setBusy(true);
     setTimeout(() => {
-      const r = signIn(form.email.trim(), form.password);
+      const r = signIn(form.email.trim(), form.password, remember);
       setBusy(false);
       if ("error" in r) return toast.error(r.error);
       toast.success(`Welcome back, ${r.name.split(" ")[0]} 👋`);
