@@ -94,6 +94,17 @@ function AdminLogin() {
             </div>
           </div>
 
+          <div className="flex items-center justify-between text-xs">
+            <label className="inline-flex items-center gap-2 font-semibold cursor-pointer select-none">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                className="h-4 w-4 accent-pop-yellow rounded border-2 border-paper"/>
+              Keep me signed in
+            </label>
+            <Link to="/forgot-password" search={{ admin: true } as any} className="font-bold underline text-paper">
+              Forgot password?
+            </Link>
+          </div>
+
           <button disabled={busy} className="w-full justify-center inline-flex items-center gap-2 rounded-full border-[3px] border-paper bg-pop-yellow text-ink font-bold px-5 py-3 disabled:opacity-60">
             <KeyRound size={16}/> {busy ? "Verifying…" : "Enter admin"}
           </button>
@@ -101,6 +112,7 @@ function AdminLogin() {
           <p className="text-[11px] text-center text-paper/70">
             Not staff? <Link to="/login" className="font-bold underline text-paper">Customer sign in</Link>
           </p>
+
         </motion.form>
       </section>
     </Layout>
