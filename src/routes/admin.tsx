@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import {
-  useProducts, useUser, saveProduct, deleteProduct, formatPrice,
+  useProducts, saveProduct, deleteProduct, formatPrice,
   useCategories, saveCategory, deleteCategory,
   useOrders, updateOrderStatus, updateOrderShipping,
   useFunnelEvents, useStockAudit,
