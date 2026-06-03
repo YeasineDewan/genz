@@ -44,7 +44,7 @@ function Admin() {
   const [tab, setTab] = useState<Tab>("dashboard");
 
   useEffect(() => {
-    if (!user) navigate({ to: "/login", search: { admin: true } as any });
+    if (!user) navigate({ to: "/admin/login" as any });
     else if (!user.isAdmin) navigate({ to: "/" });
   }, [user, navigate]);
   if (!user?.isAdmin) return null;
