@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useRequireAuth } from "@/lib/auth-guard";
 import { Layout } from "@/components/Layout";
 import {
   useUser, useOrders, useProducts, useWishlist, useNotifications,
