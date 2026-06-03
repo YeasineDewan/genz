@@ -27,11 +27,10 @@ export const Route = createFileRoute("/account")({
 type Tab = "overview" | "orders" | "addresses" | "wishlist" | "reviews" | "rewards" | "notifications" | "profile" | "security" | "preferences";
 
 function AccountPage() {
-  const user = useUser();
+  const user = useRequireAuth({ customer: true });
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("overview");
 
-  useEffect(() => { if (!user) navigate({ to: "/login" }); }, [user, navigate]);
   if (!user) return null;
 
   const tabs: { key: Tab; label: string; Icon: any }[] = [
