@@ -21,6 +21,7 @@ function Login() {
   const search = useSearch({ from: "/login" }) as LoginSearch;
   const user = useUser();
   const [form, setForm] = useState({ email: "", password: "" });
+  const [remember, setRemember] = useState(true);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -36,7 +37,7 @@ function Login() {
     if (!form.email || !form.password) return toast.error("Email and password required");
     setBusy(true);
     setTimeout(() => {
-      const r = signIn(form.email.trim(), form.password);
+      const r = signIn(form.email.trim(), form.password, remember);
       setBusy(false);
       if ("error" in r) return toast.error(r.error);
       toast.success(`Welcome back, ${r.name.split(" ")[0]} 👋`);
@@ -102,9 +103,19 @@ function Login() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between text-sm">
+              <label className="inline-flex items-center gap-2 font-semibold cursor-pointer select-none">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}
+                  className="h-4 w-4 accent-ink rounded border-2 border-ink"/>
+                Remember me
+              </label>
+              <Link to="/forgot-password" className="font-bold underline">Forgot password?</Link>
+            </div>
+
             <button disabled={busy} className="btn-pop w-full justify-center disabled:opacity-60">
               {busy ? "Signing in…" : "Sign in"}
             </button>
+
 
             <p className="text-sm text-center">
               No account? <Link to="/signup" className="font-bold underline">Create one</Link>
