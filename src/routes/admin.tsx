@@ -17,66 +17,147 @@ import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
+  LogOut, Clock, ShieldCheck, Menu,
 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/admin")({
-  head: () => ({ meta: [{ title: "Admin Dashboard — GenZ" }] }),
+  head: () => ({ meta: [{ title: "Admin Dashboard — GenZ" }, { name: "robots", content: "noindex,nofollow" }] }),
   component: Admin,
 });
 
 type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews";
 
-const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
-  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { key: "products", label: "Products", Icon: Package },
-  { key: "categories", label: "Categories", Icon: Tag },
-  { key: "orders", label: "Orders", Icon: Truck },
-  { key: "inventory", label: "Inventory", Icon: Boxes },
-  { key: "coupons", label: "Coupons", Icon: Ticket },
-  { key: "reviews", label: "Reviews", Icon: MessageSquare },
+const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }>; hint: string }[] = [
+  { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, hint: "Overview & KPIs" },
+  { key: "products", label: "Products", Icon: Package, hint: "Catalog management" },
+  { key: "categories", label: "Categories", Icon: Tag, hint: "Taxonomy" },
+  { key: "orders", label: "Orders", Icon: Truck, hint: "Fulfillment" },
+  { key: "inventory", label: "Inventory", Icon: Boxes, hint: "Stock audit" },
+  { key: "coupons", label: "Coupons", Icon: Ticket, hint: "Promotions" },
+  { key: "reviews", label: "Reviews", Icon: MessageSquare, hint: "Moderation" },
 ];
 
 
 const ORDER_STATUSES: OrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"];
 
 function Admin() {
-  const user = useUser();
-  const navigate = useNavigate();
+  const user = useRequireAuth({ admin: true });
   const [tab, setTab] = useState<Tab>("dashboard");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    if (!user) navigate({ to: "/admin/login" as any });
-    else if (!user.isAdmin) navigate({ to: "/" });
-  }, [user, navigate]);
   if (!user?.isAdmin) return null;
+  const active = TABS.find((t) => t.key === tab)!;
 
   return (
     <Layout>
-      <section className="mx-auto max-w-7xl px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-5xl">Admin</h1>
-          <p className="text-muted-foreground">Manage products, categories, orders, inventory & analytics.</p>
-        </div>
+      <section className="mx-auto max-w-[1400px] px-4 py-6">
+        <div className="grid md:grid-cols-[260px_minmax(0,1fr)] gap-6">
+          {/* Sidebar */}
+          <aside className={`${mobileOpen ? "block" : "hidden"} md:block`}>
+            <div className="md:sticky md:top-24 space-y-3">
+              <div className="sticker rounded-2xl bg-ink text-paper p-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest opacity-80">
+                  <ShieldCheck size={12}/> Admin
+                </div>
+                <div className="mt-2 font-bold truncate">{user.name}</div>
+                <div className="text-xs text-paper/70 truncate">{user.email}</div>
+                <SessionBadge/>
+              </div>
 
-        <div className="flex gap-2 flex-wrap mb-6 sticky top-20 z-30 py-2 bg-paper/80 backdrop-blur">
-          {TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`chip ${tab === t.key ? "bg-pop-pink text-white" : ""}`}>
-              <t.Icon size={14}/> {t.label}
-            </button>
-          ))}
-        </div>
+              <nav className="sticker rounded-2xl bg-white p-2">
+                {TABS.map((t) => {
+                  const Icon = t.Icon;
+                  const isActive = tab === t.key;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => { setTab(t.key); setMobileOpen(false); }}
+                      className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 mb-1 transition ${
+                        isActive
+                          ? "bg-pop-pink text-white border-ink shadow-sticker-sm"
+                          : "border-transparent hover:bg-pop-yellow hover:border-ink"
+                      }`}
+                    >
+                      <Icon size={16}/>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm">{t.label}</div>
+                        <div className={`text-[10px] uppercase tracking-wide truncate ${isActive ? "text-white/80" : "text-muted-foreground"}`}>{t.hint}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </nav>
 
-        {tab === "dashboard" && <Dashboard/>}
-        {tab === "products" && <Products/>}
-        {tab === "categories" && <Categories/>}
-        {tab === "orders" && <Orders/>}
-        {tab === "inventory" && <Inventory/>}
-        {tab === "coupons" && <Coupons/>}
-        {tab === "reviews" && <ReviewsModeration/>}
+              <div className="sticker rounded-2xl bg-pop-yellow p-3 space-y-2">
+                <Link to="/" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-bold">
+                  View storefront
+                </Link>
+                <button
+                  onClick={() => { signOut(); toast.success("Signed out"); }}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-ink text-paper px-3 py-2 text-sm font-bold"
+                >
+                  <LogOut size={14}/> Sign out
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          {/* Main */}
+          <main>
+            <div className="flex items-center gap-3 mb-6">
+              <button
+                onClick={() => setMobileOpen((v) => !v)}
+                className="md:hidden h-10 w-10 grid place-items-center rounded-xl border-[3px] border-ink bg-white"
+                aria-label="Toggle menu"
+              >
+                <Menu size={18}/>
+              </button>
+              <div>
+                <div className="text-xs uppercase tracking-widest font-bold text-muted-foreground">Admin / {active.label}</div>
+                <h1 className="text-4xl md:text-5xl">{active.label}</h1>
+                <p className="text-muted-foreground text-sm">{active.hint}</p>
+              </div>
+            </div>
+
+            {tab === "dashboard" && <Dashboard/>}
+            {tab === "products" && <Products/>}
+            {tab === "categories" && <Categories/>}
+            {tab === "orders" && <Orders/>}
+            {tab === "inventory" && <Inventory/>}
+            {tab === "coupons" && <Coupons/>}
+            {tab === "reviews" && <ReviewsModeration/>}
+          </main>
+        </div>
       </section>
     </Layout>
+  );
+}
+
+function SessionBadge() {
+  const [left, setLeft] = useState<string>("");
+  useEffect(() => {
+    const tick = () => {
+      const s = getSession();
+      if (!s) { setLeft(""); return; }
+      const ms = s.expiresAt - Date.now();
+      if (ms <= 0) { setLeft("expired"); return; }
+      const mins = Math.floor(ms / 60000);
+      const hrs = Math.floor(mins / 60);
+      const days = Math.floor(hrs / 24);
+      if (days > 0) setLeft(`${days}d ${hrs % 24}h left`);
+      else if (hrs > 0) setLeft(`${hrs}h ${mins % 60}m left`);
+      else setLeft(`${mins}m left`);
+    };
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  if (!left) return null;
+  return (
+    <div className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-paper/10 border border-paper/30 rounded-full px-2 py-1">
+      <Clock size={10}/> Session {left}
+    </div>
   );
 }
 
