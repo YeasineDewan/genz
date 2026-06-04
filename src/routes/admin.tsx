@@ -10,6 +10,14 @@ import {
   signOut, getSession,
 } from "@/lib/store";
 import { useRequireAuth } from "@/lib/auth-guard";
+import {
+  useAuditLog, clearAuditLog, AUDIT_LABELS, AUDIT_TONES, recordAudit,
+  type AuditAction,
+} from "@/lib/audit";
+import {
+  useEmailConfig, saveEmailConfig, sendEmail, isEmailConfigured,
+  type EmailConfig, type EmailProvider,
+} from "@/lib/email-config";
 import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
 import { REPORT_REASONS, type ReportReason } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +25,7 @@ import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
-  LogOut, Clock, ShieldCheck, Menu,
+  LogOut, Clock, ShieldCheck, Menu, ShieldAlert, Mail, Send, RefreshCcw, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,7 +34,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews";
+type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews" | "security";
 
 const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }>; hint: string }[] = [
   { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, hint: "Overview & KPIs" },
@@ -36,6 +44,7 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "inventory", label: "Inventory", Icon: Boxes, hint: "Stock audit" },
   { key: "coupons", label: "Coupons", Icon: Ticket, hint: "Promotions" },
   { key: "reviews", label: "Reviews", Icon: MessageSquare, hint: "Moderation" },
+  { key: "security", label: "Security", Icon: ShieldAlert, hint: "Audit log & email" },
 ];
 
 
