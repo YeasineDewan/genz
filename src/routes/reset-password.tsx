@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { resetPasswordWithToken, verifyResetToken } from "@/lib/store";
+import { PasswordStrength, isPasswordAcceptable } from "@/components/PasswordStrength";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, AlertTriangle, Check, X } from "lucide-react";
 
 type Search = { token?: string; admin?: boolean };
 
@@ -31,6 +32,10 @@ function ResetPassword() {
   const verification = useMemo(() => (token ? verifyResetToken(token) : { error: "Missing token" }), [token]);
   const tokenError = "error" in verification ? verification.error : null;
 
+  const matches = pw.length > 0 && pw === pw2;
+  const strong = isPasswordAcceptable(pw);
+  const canSubmit = strong && matches && !busy;
+
   useEffect(() => {
     if (done) {
       const t = window.setTimeout(() => navigate({ to: isAdmin ? "/admin/login" as any : "/login" }), 2500);
@@ -40,6 +45,7 @@ function ResetPassword() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!strong) return toast.error("Please choose a stronger password");
     if (pw !== pw2) return toast.error("Passwords don't match");
     setBusy(true);
     setTimeout(() => {
@@ -84,8 +90,14 @@ function ResetPassword() {
         ) : (
           <form onSubmit={submit} className={`sticker rounded-2xl p-6 space-y-4 ${isAdmin ? "bg-ink text-paper" : "bg-white"}`}>
             <PwField show={show} setShow={setShow} value={pw} onChange={setPw} label="New password" isAdmin={isAdmin} autoFocus/>
+            <PasswordStrength password={pw} dark={isAdmin}/>
             <PwField show={show} setShow={setShow} value={pw2} onChange={setPw2} label="Confirm password" isAdmin={isAdmin}/>
-            <button disabled={busy} className={`w-full justify-center inline-flex items-center gap-2 rounded-full border-[3px] font-bold px-5 py-3 disabled:opacity-60 ${
+            {pw2.length > 0 && (
+              <div className={`text-[11px] font-bold flex items-center gap-1 ${matches ? (isAdmin ? "text-pop-yellow" : "text-emerald-700") : "text-destructive"}`}>
+                {matches ? <><Check size={12}/> Passwords match</> : <><X size={12}/> Passwords don't match</>}
+              </div>
+            )}
+            <button disabled={!canSubmit} className={`w-full justify-center inline-flex items-center gap-2 rounded-full border-[3px] font-bold px-5 py-3 disabled:opacity-50 disabled:cursor-not-allowed ${
               isAdmin ? "border-paper bg-pop-yellow text-ink" : "btn-pop"
             }`}>
               {busy ? "Updating…" : "Update password"}
@@ -107,7 +119,7 @@ function PwField({ show, setShow, value, onChange, label, isAdmin, autoFocus }: 
       <div className="relative">
         <input
           required type={show ? "text" : "password"} autoComplete="new-password" autoFocus={autoFocus}
-          placeholder="At least 6 characters" minLength={6}
+          placeholder="At least 8 characters" minLength={8}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={`w-full rounded-xl border-[3px] px-4 py-3 pr-11 outline-none ${

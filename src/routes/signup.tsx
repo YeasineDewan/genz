@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
 import { signUp } from "@/lib/store";
+import { PasswordStrength, isPasswordAcceptable } from "@/components/PasswordStrength";
 import { useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Mail, Lock, User as UserIcon, Eye, EyeOff, Sparkles, ShieldCheck } from "lucide-react";
+import { Mail, Lock, User as UserIcon, Eye, EyeOff, Sparkles, ShieldCheck, Check, X } from "lucide-react";
 
 export const Route = createFileRoute("/signup")({
   head: () => ({ meta: [{ title: "Sign up — GenZ" }] }),
@@ -13,13 +14,18 @@ export const Route = createFileRoute("/signup")({
 
 function SignUp() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const matches = form.password.length > 0 && form.password === form.confirm;
+  const strong = isPasswordAcceptable(form.password);
+  const canSubmit = !!form.name.trim() && !!form.email.trim() && strong && matches && !busy;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (form.password.length < 6) return toast.error("Password must be at least 6 characters");
+    if (!strong) return toast.error("Please choose a stronger password");
+    if (form.password !== form.confirm) return toast.error("Passwords don't match");
     setBusy(true);
     setTimeout(() => {
       const r = signUp(form.email.trim(), form.password, form.name.trim());
@@ -70,7 +76,7 @@ function SignUp() {
             <div className="relative">
               <input
                 required type={show ? "text" : "password"} autoComplete="new-password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters" minLength={8}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-3 pr-11 outline-none focus:bg-pop-yellow/30 transition"
@@ -81,9 +87,25 @@ function SignUp() {
                 {show ? <EyeOff size={16}/> : <Eye size={16}/>}
               </button>
             </div>
+            <PasswordStrength password={form.password}/>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wide flex items-center gap-2"><Lock size={12}/> Confirm password</label>
+            <input
+              required type={show ? "text" : "password"} autoComplete="new-password"
+              placeholder="Repeat password"
+              value={form.confirm}
+              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-3 outline-none focus:bg-pop-yellow/30 transition"
+            />
+            {form.confirm.length > 0 && (
+              <div className={`text-[11px] font-bold flex items-center gap-1 ${matches ? "text-emerald-700" : "text-destructive"}`}>
+                {matches ? <><Check size={12}/> Passwords match</> : <><X size={12}/> Passwords don't match</>}
+              </div>
+            )}
           </div>
 
-          <button disabled={busy} className="btn-pop w-full justify-center disabled:opacity-60">
+          <button disabled={!canSubmit} className="btn-pop w-full justify-center disabled:opacity-50 disabled:cursor-not-allowed">
             {busy ? "Creating…" : "Create account"}
           </button>
 
