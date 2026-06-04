@@ -10,6 +10,14 @@ import {
   signOut, getSession,
 } from "@/lib/store";
 import { useRequireAuth } from "@/lib/auth-guard";
+import {
+  useAuditLog, clearAuditLog, AUDIT_LABELS, AUDIT_TONES, recordAudit,
+  type AuditAction,
+} from "@/lib/audit";
+import {
+  useEmailConfig, saveEmailConfig, sendEmail, isEmailConfigured,
+  type EmailConfig, type EmailProvider,
+} from "@/lib/email-config";
 import type { Product, CategoryDef, OrderStatus, Order, StockAuditEntry, Coupon, Review, ReviewStatus, VariantStock } from "@/lib/types";
 import { REPORT_REASONS, type ReportReason } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +25,7 @@ import {
   Pencil, Trash2, Plus, X, LayoutDashboard, Package, Tag, Truck, Boxes,
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
-  LogOut, Clock, ShieldCheck, Menu,
+  LogOut, Clock, ShieldCheck, Menu, ShieldAlert, Mail, Send, RefreshCcw, Filter,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -26,7 +34,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews";
+type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews" | "security";
 
 const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }>; hint: string }[] = [
   { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, hint: "Overview & KPIs" },
@@ -36,6 +44,7 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "inventory", label: "Inventory", Icon: Boxes, hint: "Stock audit" },
   { key: "coupons", label: "Coupons", Icon: Ticket, hint: "Promotions" },
   { key: "reviews", label: "Reviews", Icon: MessageSquare, hint: "Moderation" },
+  { key: "security", label: "Security", Icon: ShieldAlert, hint: "Audit log & email" },
 ];
 
 
@@ -127,6 +136,7 @@ function Admin() {
             {tab === "inventory" && <Inventory/>}
             {tab === "coupons" && <Coupons/>}
             {tab === "reviews" && <ReviewsModeration/>}
+            {tab === "security" && <Security/>}
           </main>
         </div>
       </section>
@@ -1775,3 +1785,261 @@ function ReportBreakdown({ reports, total }: { reports: { reason: ReportReason; 
   );
 }
 
+
+/* ───────────── Security: audit log + email config ───────────── */
+
+const ACTION_FILTERS: { value: AuditAction | "all"; label: string }[] = [
+  { value: "all", label: "All events" },
+  { value: "admin_login", label: "Admin sign-ins" },
+  { value: "admin_login_failed", label: "Failed sign-ins" },
+  { value: "customer_login", label: "Customer sign-ins" },
+  { value: "sign_out", label: "Sign-outs" },
+  { value: "password_reset_requested", label: "Reset requests" },
+  { value: "password_reset_used", label: "Reset completions" },
+  { value: "password_reset_failed", label: "Reset failures" },
+  { value: "admin_email_settings_updated", label: "Email config changes" },
+];
+
+function Security() {
+  const log = useAuditLog();
+  const [filter, setFilter] = useState<AuditAction | "all">("all");
+  const filtered = useMemo(() => filter === "all" ? log : log.filter((e) => e.action === filter), [log, filter]);
+
+  const stats = useMemo(() => {
+    const since = Date.now() - 24 * 60 * 60 * 1000;
+    const recent = log.filter((e) => e.at >= since);
+    return {
+      total: log.length,
+      adminLogins24h: recent.filter((e) => e.action === "admin_login").length,
+      failed24h: recent.filter((e) => e.action === "admin_login_failed" || e.action === "password_reset_failed").length,
+      resets24h: recent.filter((e) => e.action === "password_reset_requested" || e.action === "password_reset_used").length,
+    };
+  }, [log]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Events (all-time)" value={String(stats.total)} Icon={ShieldAlert} bg="bg-ink" fg="text-paper"/>
+        <Stat label="Admin sign-ins (24h)" value={String(stats.adminLogins24h)} Icon={ShieldCheck} bg="bg-pop-cyan"/>
+        <Stat label="Reset activity (24h)" value={String(stats.resets24h)} Icon={RefreshCcw} bg="bg-pop-yellow"/>
+        <Stat label="Failures (24h)" value={String(stats.failed24h)} Icon={AlertTriangle} bg="bg-pop-orange" warn={stats.failed24h > 0}/>
+      </div>
+
+      <EmailSettings/>
+
+      <div className="sticker rounded-2xl bg-white p-6 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-2xl">Audit log</h3>
+            <p className="text-xs text-muted-foreground">Sign-ins, sign-outs, password reset requests, token usage, and admin actions.</p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-2 rounded-full border-[3px] border-ink bg-white px-3 py-1.5">
+              <Filter size={14}/>
+              <select value={filter} onChange={(e) => setFilter(e.target.value as any)}
+                className="bg-transparent text-sm font-bold outline-none">
+                {ACTION_FILTERS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+              </select>
+            </div>
+            <button
+              onClick={() => { if (confirm("Clear the entire audit log? This cannot be undone.")) { clearAuditLog(); toast.success("Audit log cleared"); } }}
+              className="chip bg-destructive text-white"
+            ><Trash2 size={12}/> Clear log</button>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic py-6 text-center">No events match this filter.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead className="bg-pop-yellow border-b-[3px] border-ink">
+                <tr>
+                  <th className="text-left p-3">When</th>
+                  <th className="text-left p-3">Event</th>
+                  <th className="text-left p-3">Actor</th>
+                  <th className="text-left p-3">Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.slice(0, 200).map((e) => (
+                  <tr key={e.id} className="border-b border-ink/15 align-top">
+                    <td className="p-3 whitespace-nowrap text-xs font-mono">
+                      {new Date(e.at).toLocaleString()}
+                    </td>
+                    <td className="p-3">
+                      <span className={`chip ${AUDIT_TONES[e.action]} text-[11px]`}>{AUDIT_LABELS[e.action]}</span>
+                    </td>
+                    <td className="p-3">
+                      <div className="font-bold">{e.actorEmail ?? <span className="text-muted-foreground italic">unknown</span>}</div>
+                      {e.isAdmin && <div className="text-[10px] uppercase font-bold text-pop-pink">admin</div>}
+                    </td>
+                    <td className="p-3 text-xs text-muted-foreground">{e.detail ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length > 200 && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">Showing latest 200 of {filtered.length}.</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmailSettings() {
+  const cfg = useEmailConfig();
+  const [draft, setDraft] = useState<EmailConfig>(cfg);
+  const [busy, setBusy] = useState(false);
+  const [testTo, setTestTo] = useState("");
+
+  useEffect(() => { setDraft(cfg); }, [cfg]);
+
+  const onSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (draft.provider !== "disabled") {
+      if (!draft.fromEmail || !/.+@.+\..+/.test(draft.fromEmail)) return toast.error("Valid from-email required");
+      if (!draft.webhookUrl || !/^https?:\/\//.test(draft.webhookUrl)) return toast.error("Webhook URL must start with http(s)://");
+      if (draft.provider === "smtp") {
+        if (!draft.smtpHost || !draft.smtpPort) return toast.error("SMTP host and port required");
+      }
+    }
+    saveEmailConfig(draft);
+    recordAudit({
+      action: "admin_email_settings_updated",
+      detail: `Provider set to ${draft.provider}`,
+    });
+    toast.success("Email settings saved");
+  };
+
+  const onTest = async () => {
+    if (!testTo) return toast.error("Enter a test recipient email");
+    if (!isEmailConfigured(draft)) return toast.error("Save a valid configuration first");
+    setBusy(true);
+    const r = await sendEmail({
+      to: testTo,
+      subject: "GenZ email test",
+      text: "If you can read this, your GenZ email relay is working correctly.",
+      category: "test",
+    });
+    setBusy(false);
+    if (r.ok) toast.success(`Test email sent via ${r.provider}`);
+    else toast.error(r.error);
+  };
+
+  const configured = isEmailConfigured(cfg);
+
+  return (
+    <form onSubmit={onSave} className="sticker rounded-2xl bg-white p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-2xl flex items-center gap-2"><Mail size={20}/> Email delivery</h3>
+          <p className="text-xs text-muted-foreground">
+            Configure how password-reset and notification emails are sent. The browser can't open raw SMTP,
+            so we POST a signed JSON payload to a relay URL (your serverless function, Zapier, n8n, etc.) which forwards it.
+          </p>
+        </div>
+        <span className={`chip ${configured ? "bg-pop-cyan" : "bg-pop-orange"}`}>
+          {configured ? `Active · ${cfg.provider}` : "Not configured"}
+        </span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        <label className="block">
+          <div className="text-xs font-bold uppercase mb-1">Provider</div>
+          <select value={draft.provider} onChange={(e) => setDraft({ ...draft, provider: e.target.value as EmailProvider })}
+            className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none">
+            <option value="disabled">Disabled (show copy link)</option>
+            <option value="webhook">Generic webhook (Resend, Zapier, your API)</option>
+            <option value="smtp">SMTP via relay</option>
+          </select>
+        </label>
+        <label className="block">
+          <div className="text-xs font-bold uppercase mb-1">From name</div>
+          <input value={draft.fromName} onChange={(e) => setDraft({ ...draft, fromName: e.target.value })}
+            className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none"/>
+        </label>
+        <label className="block">
+          <div className="text-xs font-bold uppercase mb-1">From email</div>
+          <input type="email" value={draft.fromEmail} onChange={(e) => setDraft({ ...draft, fromEmail: e.target.value })}
+            placeholder="no-reply@yourdomain.com"
+            className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none"/>
+        </label>
+        <label className="block">
+          <div className="text-xs font-bold uppercase mb-1">Reply-to (optional)</div>
+          <input type="email" value={draft.replyTo ?? ""} onChange={(e) => setDraft({ ...draft, replyTo: e.target.value })}
+            className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none"/>
+        </label>
+      </div>
+
+      {draft.provider !== "disabled" && (
+        <>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block sm:col-span-2">
+              <div className="text-xs font-bold uppercase mb-1">Relay / webhook URL</div>
+              <input value={draft.webhookUrl ?? ""} onChange={(e) => setDraft({ ...draft, webhookUrl: e.target.value })}
+                placeholder="https://your-api.example.com/send"
+                className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none font-mono text-sm"/>
+            </label>
+            <label className="block sm:col-span-2">
+              <div className="text-xs font-bold uppercase mb-1">Shared secret (sent as X-Webhook-Secret)</div>
+              <input type="password" value={draft.webhookSecret ?? ""} onChange={(e) => setDraft({ ...draft, webhookSecret: e.target.value })}
+                placeholder="optional but recommended"
+                className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none font-mono text-sm"/>
+            </label>
+          </div>
+
+          {draft.provider === "smtp" && (
+            <div className="rounded-xl border-[3px] border-ink bg-pop-yellow/30 p-4 space-y-3">
+              <div className="text-xs font-bold uppercase">SMTP credentials (forwarded to relay)</div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <label className="block">
+                  <div className="text-[10px] font-bold uppercase mb-1">Host</div>
+                  <input value={draft.smtpHost ?? ""} onChange={(e) => setDraft({ ...draft, smtpHost: e.target.value })}
+                    placeholder="smtp.mailgun.org"
+                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
+                </label>
+                <label className="block">
+                  <div className="text-[10px] font-bold uppercase mb-1">Port</div>
+                  <input type="number" value={draft.smtpPort ?? 587} onChange={(e) => setDraft({ ...draft, smtpPort: +e.target.value })}
+                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
+                </label>
+                <label className="block">
+                  <div className="text-[10px] font-bold uppercase mb-1">Username</div>
+                  <input value={draft.smtpUser ?? ""} onChange={(e) => setDraft({ ...draft, smtpUser: e.target.value })}
+                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
+                </label>
+                <label className="block">
+                  <div className="text-[10px] font-bold uppercase mb-1">Password / API key</div>
+                  <input type="password" value={draft.smtpPassword ?? ""} onChange={(e) => setDraft({ ...draft, smtpPassword: e.target.value })}
+                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-bold sm:col-span-2">
+                  <input type="checkbox" checked={!!draft.smtpSecure} onChange={(e) => setDraft({ ...draft, smtpSecure: e.target.checked })}/>
+                  Use TLS (recommended on port 465)
+                </label>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Credentials are stored in this browser only and sent to the relay you control. Never paste credentials into a third-party webhook you don't trust.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap pt-2 border-t-2 border-ink/10">
+        <button className="btn-pop"><Save size={16}/> Save settings</button>
+        <div className="flex-1"/>
+        <input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)}
+          placeholder="test@example.com"
+          className="rounded-full border-[3px] border-ink bg-white px-4 py-2 outline-none text-sm w-56"/>
+        <button type="button" onClick={onTest} disabled={busy}
+          className="inline-flex items-center gap-2 rounded-full border-[3px] border-ink bg-pop-cyan font-bold px-4 py-2 text-sm disabled:opacity-60">
+          <Send size={14}/> {busy ? "Sending…" : "Send test"}
+        </button>
+      </div>
+    </form>
+  );
+}

@@ -2,6 +2,8 @@
 // the read/write helpers with fetch() calls — public API is stable.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
+import { recordAudit } from "./audit";
+import { sendEmail, buildResetEmail, isEmailConfigured } from "./email-config";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
@@ -199,25 +201,72 @@ export const signIn = (
 ): User | { error: string } => {
   const users = read<StoredUser[]>(KEYS.users, []);
   const u = users.find((x) => x.email === email && x.password === password);
-  if (!u) return { error: "Invalid credentials" };
+  if (!u) {
+    recordAudit({ action: "admin_login_failed", actorEmail: email, detail: "Invalid credentials" });
+    return { error: "Invalid credentials" };
+  }
   const { password: _, ...pub } = u;
   write(KEYS.user, pub);
   startSession(pub.id, remember);
+  recordAudit({
+    action: pub.isAdmin ? "admin_login" : "customer_login",
+    actorEmail: pub.email, actorId: pub.id, isAdmin: pub.isAdmin,
+    detail: remember ? "Remembered session (30d)" : "Standard session (1h)",
+  });
   return pub;
 };
-export const signOut = () => clearSession();
+export const signOut = () => {
+  const cur = read<User | null>(KEYS.user, null);
+  if (cur) {
+    recordAudit({
+      action: "sign_out", actorEmail: cur.email, actorId: cur.id, isAdmin: cur.isAdmin,
+    });
+  }
+  clearSession();
+};
 
-// --- Password reset (token-based; no email backend, token is returned to caller) ---
-export const requestPasswordReset = (email: string): { token: string; expiresAt: number } | { error: string } => {
+// --- Password reset (token-based). Sends via configured provider when available;
+// otherwise returns the URL so the caller can display a copy-link fallback. ---
+export const requestPasswordReset = async (
+  email: string,
+  opts?: { isAdmin?: boolean; origin?: string },
+): Promise<
+  | { token: string; expiresAt: number; emailed: boolean; resetUrl: string }
+  | { error: string }
+> => {
   const users = read<StoredUser[]>(KEYS.users, []);
   const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-  if (!u) return { error: "No account with that email" };
+  if (!u) {
+    recordAudit({ action: "password_reset_failed", actorEmail: email, detail: "Unknown account" });
+    return { error: "No account with that email" };
+  }
   const token = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
   const expiresAt = Date.now() + RESET_TOKEN_MS;
   const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
   tokens[token] = { userId: u.id, expiresAt };
   write(KEYS.resetTokens, tokens);
-  return { token, expiresAt };
+
+  const origin = opts?.origin ?? (typeof window !== "undefined" ? window.location.origin : "");
+  const isAdmin = !!opts?.isAdmin;
+  const resetUrl = `${origin}/reset-password?token=${token}${isAdmin ? "&admin=true" : ""}`;
+
+  let emailed = false;
+  if (isEmailConfigured()) {
+    const r = await sendEmail(buildResetEmail({ to: u.email, resetUrl, isAdmin }));
+    emailed = r.ok;
+    recordAudit({
+      action: "password_reset_requested",
+      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
+      detail: r.ok ? `Emailed via ${r.provider}` : `Email failed: ${r.error}`,
+    });
+  } else {
+    recordAudit({
+      action: "password_reset_requested",
+      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
+      detail: "Email not configured — link shown in browser",
+    });
+  }
+  return { token, expiresAt, emailed, resetUrl };
 };
 
 export const verifyResetToken = (token: string): { ok: true; email: string } | { error: string } => {
@@ -235,7 +284,10 @@ export const resetPasswordWithToken = (token: string, newPw: string): { ok: true
   if (newPw.length < 6) return { error: "Password must be at least 6 characters" };
   const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
   const t = tokens[token];
-  if (!t || Date.now() > t.expiresAt) return { error: "Invalid or expired token" };
+  if (!t || Date.now() > t.expiresAt) {
+    recordAudit({ action: "password_reset_failed", detail: "Invalid or expired token" });
+    return { error: "Invalid or expired token" };
+  }
   const users = read<StoredUser[]>(KEYS.users, []);
   const u = users.find((x) => x.id === t.userId);
   if (!u) return { error: "User not found" };
@@ -243,6 +295,11 @@ export const resetPasswordWithToken = (token: string, newPw: string): { ok: true
   write(KEYS.users, users);
   delete tokens[token];
   write(KEYS.resetTokens, tokens);
+  recordAudit({
+    action: "password_reset_used",
+    actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
+    detail: "Password updated via reset token",
+  });
   return { ok: true };
 };
 
