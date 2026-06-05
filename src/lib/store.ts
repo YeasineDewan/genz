@@ -1,9 +1,9 @@
-// Tiny localStorage-backed store. Swap to a Laravel REST client later by replacing
-// the read/write helpers with fetch() calls — public API is stable.
+// localStorage-backed store for product/order/cart data.
+// Auth has been migrated to Supabase Auth — passwords and roles are NOT here.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import { recordAudit } from "./audit";
-import { sendEmail, buildResetEmail, isEmailConfigured } from "./email-config";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
