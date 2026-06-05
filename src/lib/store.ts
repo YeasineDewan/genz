@@ -1,9 +1,10 @@
-// localStorage-backed store for product/order/cart data.
-// Auth has been migrated to Supabase Auth — passwords and roles are NOT here.
+// Tiny localStorage-backed store. Auth migration to Supabase is in progress —
+// see src/lib/auth.functions.ts. This file will be refactored to use Supabase
+// Auth in the next iteration; for now it continues to use localStorage.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import { recordAudit } from "./audit";
-import { supabase } from "@/integrations/supabase/client";
+import { sendEmail, buildResetEmail, isEmailConfigured } from "./email-config";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
