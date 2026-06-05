@@ -12,16 +12,13 @@ export interface EmailConfig {
   provider: EmailProvider;
   fromName: string;
   fromEmail: string;
-  // webhook
   webhookUrl?: string;
   webhookSecret?: string;
-  // smtp (relayed via webhookUrl on the server side)
   smtpHost?: string;
   smtpPort?: number;
   smtpUser?: string;
   smtpPassword?: string;
   smtpSecure?: boolean;
-  // misc
   replyTo?: string;
   updatedAt?: number;
 }
@@ -109,27 +106,8 @@ export async function sendEmail(payload: SendEmailPayload): Promise<SendResult> 
 export function buildResetEmail(opts: { to: string; resetUrl: string; isAdmin: boolean }): SendEmailPayload {
   const { to, resetUrl, isAdmin } = opts;
   const role = isAdmin ? "admin" : "customer";
-  const subject = isAdmin
-    ? "Reset your GenZ admin password"
-    : "Reset your GenZ password";
-  const text =
-`Hi,
-
-We received a request to reset your GenZ ${role} password.
-Click the link below to set a new password — it expires in 30 minutes.
-
-${resetUrl}
-
-If you didn't request this, you can safely ignore this email.
-
-— GenZ Shop`;
-  const html = `<!doctype html><html><body style="font-family:Inter,system-ui,Arial,sans-serif;background:#fafafa;padding:24px;color:#0a0a0a">
-  <div style="max-width:520px;margin:0 auto;background:#fff;border:3px solid #0a0a0a;border-radius:18px;padding:28px">
-    <h1 style="margin:0 0 8px;font-size:28px">Reset your password</h1>
-    <p style="margin:0 0 16px;color:#555">We received a request to reset your GenZ ${role} password.</p>
-    <p style="margin:0 0 24px"><a href="${resetUrl}" style="display:inline-block;background:#ec4899;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:3px solid #0a0a0a">Set a new password</a></p>
-    <p style="margin:0;color:#888;font-size:12px">This link expires in 30 minutes. If you didn't request this, ignore this email.</p>
-  </div>
-</body></html>`;
+  const subject = isAdmin ? "Reset your GenZ admin password" : "Reset your GenZ password";
+  const text = `Hi,\n\nWe received a request to reset your GenZ ${role} password.\nClick the link below to set a new password — it expires in 30 minutes.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.\n\n— GenZ Shop`;
+  const html = `<!doctype html><html><body><p>Reset your password: <a href="${resetUrl}">${resetUrl}</a></p></body></html>`;
   return { to, subject, text, html, category: `password_reset_${role}` };
 }

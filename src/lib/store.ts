@@ -1,5 +1,6 @@
-// Tiny localStorage-backed store. Swap to a Laravel REST client later by replacing
-// the read/write helpers with fetch() calls — public API is stable.
+// Tiny localStorage-backed store. Auth migration to Supabase is in progress —
+// see src/lib/auth.functions.ts. This file will be refactored to use Supabase
+// Auth in the next iteration; for now it continues to use localStorage.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import { recordAudit } from "./audit";
