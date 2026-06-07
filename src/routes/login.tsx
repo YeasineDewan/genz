@@ -32,20 +32,19 @@ function Login() {
     else navigate({ to: "/account" });
   }, [user, search, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email || !form.password) return toast.error("Email and password required");
     setBusy(true);
-    setTimeout(() => {
-      const r = signIn(form.email.trim(), form.password, remember);
-      setBusy(false);
-      if ("error" in r) return toast.error(r.error);
-      toast.success(`Welcome back, ${r.name.split(" ")[0]} 👋`);
-      if (r.isAdmin) navigate({ to: "/admin" });
-      else if (search.redirect) window.location.href = search.redirect;
-      else navigate({ to: "/account" });
-    }, 300);
+    const r = await signIn(form.email.trim(), form.password, remember);
+    setBusy(false);
+    if ("error" in r) return toast.error(r.error);
+    toast.success(`Welcome back, ${r.name.split(" ")[0]} 👋`);
+    if (r.isAdmin) navigate({ to: "/admin" });
+    else if (search.redirect) window.location.href = search.redirect;
+    else navigate({ to: "/account" });
   };
+
 
   return (
     <Layout>

@@ -1,18 +1,18 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { resetPasswordWithToken, verifyResetToken } from "@/lib/store";
+import { supabase } from "@/integrations/supabase/client";
+import { resetPasswordWithToken } from "@/lib/store";
 import { PasswordStrength, isPasswordAcceptable } from "@/components/PasswordStrength";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, AlertTriangle, Check, X } from "lucide-react";
 
-type Search = { token?: string; admin?: boolean };
+type Search = { admin?: boolean };
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({ meta: [{ title: "Reset password — GenZ" }, { name: "robots", content: "noindex" }] }),
   validateSearch: (s: Record<string, unknown>): Search => ({
-    token: typeof s.token === "string" ? s.token : undefined,
     admin: s.admin === true || s.admin === "true",
   }),
   component: ResetPassword,
@@ -22,15 +22,37 @@ function ResetPassword() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/reset-password" }) as Search;
   const isAdmin = !!search.admin;
-  const token = search.token ?? "";
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const [ready, setReady] = useState<boolean | null>(null); // null=loading, false=invalid
 
-  const verification = useMemo(() => (token ? verifyResetToken(token) : { error: "Missing token" }), [token]);
-  const tokenError = "error" in verification ? verification.error : null;
+  // Verify a recovery session is active. Supabase exchanges the recovery
+  // token in the URL hash on its own; we just check whether we now have a user.
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled) return;
+      if (data.user?.email) {
+        setEmail(data.user.email);
+        setReady(true);
+      } else {
+        setReady(false);
+      }
+    };
+    // Give Supabase a tick to process the hash, then check + also react to events.
+    const sub = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        if (session?.user?.email) { setEmail(session.user.email); setReady(true); }
+      }
+    });
+    void check();
+    return () => { cancelled = true; sub.data.subscription.unsubscribe(); };
+  }, []);
 
   const matches = pw.length > 0 && pw === pw2;
   const strong = isPasswordAcceptable(pw);
@@ -43,18 +65,18 @@ function ResetPassword() {
     }
   }, [done, isAdmin, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!strong) return toast.error("Please choose a stronger password");
     if (pw !== pw2) return toast.error("Passwords don't match");
     setBusy(true);
-    setTimeout(() => {
-      const r = resetPasswordWithToken(token, pw);
-      setBusy(false);
-      if ("error" in r) return toast.error(r.error);
-      setDone(true);
-      toast.success("Password updated");
-    }, 250);
+    const r = await resetPasswordWithToken("", pw);
+    setBusy(false);
+    if ("error" in r) return toast.error(r.error);
+    setDone(true);
+    toast.success("Password updated");
+    // Sign out so the user must log in with the new password.
+    await supabase.auth.signOut();
   };
 
   return (
@@ -65,16 +87,18 @@ function ResetPassword() {
             <ShieldCheck size={12}/> Set new password
           </div>
           <h1 className="text-5xl">Reset password</h1>
-          {!tokenError && "email" in verification && (
-            <p className="text-muted-foreground mt-2 text-sm">For <span className="font-bold">{verification.email}</span></p>
-          )}
+          {email && <p className="text-muted-foreground mt-2 text-sm">For <span className="font-bold">{email}</span></p>}
         </motion.div>
 
-        {tokenError ? (
+        {ready === null ? (
+          <div className="sticker rounded-2xl p-6 bg-white text-center text-sm text-muted-foreground">
+            Verifying recovery link…
+          </div>
+        ) : ready === false ? (
           <div className="sticker rounded-2xl p-6 space-y-3 bg-pop-pink text-white text-center">
             <AlertTriangle className="mx-auto" size={32}/>
-            <h2 className="text-2xl font-bold">{tokenError}</h2>
-            <p className="text-sm">Request a fresh reset link.</p>
+            <h2 className="text-2xl font-bold">Invalid or expired link</h2>
+            <p className="text-sm">Request a fresh reset email.</p>
             <Link to="/forgot-password" search={{ admin: isAdmin } as any}
               className="inline-flex items-center justify-center rounded-full border-[3px] border-ink bg-white text-ink font-bold px-5 py-2.5 text-sm">
               Request new link

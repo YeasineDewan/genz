@@ -1,10 +1,12 @@
-// Tiny localStorage-backed store. Auth migration to Supabase is in progress —
-// see src/lib/auth.functions.ts. This file will be refactored to use Supabase
-// Auth in the next iteration; for now it continues to use localStorage.
+// Auth is now backed by Supabase Auth — sessions, passwords, and roles all
+// live server-side. Per-user "extras" that aren't on the auth user yet
+// (addresses, preferences, notifications, loyalty points, avatar, bio,
+// birthday, phone) are kept in a localStorage cache keyed by Supabase
+// `user.id`. Nothing sensitive is stored client-side.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import { recordAudit } from "./audit";
-import { sendEmail, buildResetEmail, isEmailConfigured } from "./email-config";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
@@ -12,11 +14,12 @@ import type {
   Address, UserPreferences, Notification,
 } from "./types";
 
+
 const KEYS = {
   products: "genz.products",
   cart: "genz.cart",
-  user: "genz.user",
-  users: "genz.users",
+  user: "genz.user",                // cached User object for current session
+  profiles: "genz.profileExtras",   // Record<userId, ProfileExtras>
   orders: "genz.orders",
   categories: "genz.categories",
   funnel: "genz.funnel",
@@ -26,17 +29,14 @@ const KEYS = {
   recent: "genz.recent",
   coupons: "genz.coupons",
   appliedCoupon: "genz.appliedCoupon",
-  session: "genz.session",
-  resetTokens: "genz.resetTokens",
 } as const;
 
-// Session timeouts (ms)
-export const SESSION_MS_DEFAULT = 60 * 60 * 1000;          // 1h
-export const SESSION_MS_REMEMBER = 30 * 24 * 60 * 60 * 1000; // 30d
-export const RESET_TOKEN_MS = 30 * 60 * 1000;              // 30min
+// Per-user extras not yet stored in Supabase. Keyed by Supabase user.id.
+type ProfileExtras = Pick<
+  User,
+  "phone" | "avatar" | "bio" | "birthday" | "addresses" | "preferences" | "notifications" | "loyaltyPoints"
+>;
 
-interface SessionRecord { userId: string; expiresAt: number; remember: boolean; }
-interface ResetTokenRecord { userId: string; expiresAt: number; }
 
 export const defaultCategories: CategoryDef[] = [
   { id: "c-tops", slug: "tops", name: "Tops", emoji: "👕" },
@@ -83,20 +83,21 @@ function write<T>(key: string, val: T) {
 }
 void SERVER_SNAPSHOT;
 
-const SEED_VERSION = "2";
+const SEED_VERSION = "3";
 export function ensureSeeded() {
   if (typeof window === "undefined") return;
   const v = localStorage.getItem("genz.seedVersion");
   if (v !== SEED_VERSION) {
     write(KEYS.products, seedProducts);
     write(KEYS.categories, defaultCategories);
+    // Clean up legacy localStorage auth data from previous builds.
+    localStorage.removeItem("genz.users");
+    localStorage.removeItem("genz.session");
+    localStorage.removeItem("genz.resetTokens");
     localStorage.setItem("genz.seedVersion", SEED_VERSION);
   }
-  if (!localStorage.getItem(KEYS.users)) {
-    write(KEYS.users, []);
-  }
-
 }
+
 
 // --- Categories ---
 export const getCategories = (): CategoryDef[] => read(KEYS.categories, defaultCategories);
@@ -155,165 +156,204 @@ export const updateCartQty = (i: number, qty: number) => {
 };
 export const clearCart = () => setCart([]);
 
-// --- Auth ---
-type StoredUser = User & { password: string };
+// --- Auth (Supabase-backed) ---
+// Passwords, sessions, and roles all live in Supabase. The browser only caches
+// a derived User object so the UI can stay synchronous via useSyncExternalStore.
+// Per-user "extras" (addresses, preferences, notifications, loyalty, avatar,
+// phone, bio, birthday) live in a localStorage cache keyed by Supabase user.id
+// — never anything sensitive.
 
-const startSession = (userId: string, remember: boolean) => {
-  const expiresAt = Date.now() + (remember ? SESSION_MS_REMEMBER : SESSION_MS_DEFAULT);
-  write<SessionRecord>(KEYS.session, { userId, expiresAt, remember });
+const getExtras = (userId: string): ProfileExtras => {
+  const all = read<Record<string, ProfileExtras>>(KEYS.profiles, {});
+  return all[userId] ?? {};
+};
+const saveExtras = (userId: string, extras: ProfileExtras) => {
+  const all = read<Record<string, ProfileExtras>>(KEYS.profiles, {});
+  all[userId] = extras;
+  write(KEYS.profiles, all);
 };
 
-const clearSession = () => {
-  write(KEYS.session, null);
-  write(KEYS.user, null);
-};
+export const getCurrentUser = (): User | null => read<User | null>(KEYS.user, null);
 
-export const getSession = (): SessionRecord | null => {
-  const s = read<SessionRecord | null>(KEYS.session, null);
-  if (!s) return null;
-  if (Date.now() > s.expiresAt) { clearSession(); return null; }
-  return s;
-};
-
-export const getCurrentUser = (): User | null => {
+// Back-compat shim. Returns a truthy object when a Supabase session exists.
+export const getSession = (): { userId: string; expiresAt: number; remember: boolean } | null => {
   const u = read<User | null>(KEYS.user, null);
   if (!u) return null;
-  const s = read<SessionRecord | null>(KEYS.session, null);
-  // Back-compat: pre-existing users without a session get one started silently.
-  if (!s) { startSession(u.id, false); return u; }
-  if (Date.now() > s.expiresAt) { clearSession(); return null; }
-  return u;
+  // Supabase handles real expiry; surface a far-future timestamp so legacy
+  // session-badge UIs keep rendering without lying about exact expiry.
+  return { userId: u.id, expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, remember: true };
 };
 
-export const signUp = (
-  email: string, password: string, name: string, remember = false,
-): User | { error: string } => {
-  const users = read<StoredUser[]>(KEYS.users, []);
-  if (users.some((u) => u.email === email)) return { error: "Email already used" };
-  const u: StoredUser = { id: crypto.randomUUID(), email, password, name, isAdmin: false };
-  users.push(u);
-  write(KEYS.users, users);
-  const { password: _, ...pub } = u;
-  write(KEYS.user, pub);
-  startSession(pub.id, remember);
-  return pub;
-};
-export const signIn = (
-  email: string, password: string, remember = false,
-): User | { error: string } => {
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const u = users.find((x) => x.email === email && x.password === password);
-  if (!u) {
-    recordAudit({ action: "admin_login_failed", actorEmail: email, detail: "Invalid credentials" });
-    return { error: "Invalid credentials" };
-  }
-  const { password: _, ...pub } = u;
-  write(KEYS.user, pub);
-  startSession(pub.id, remember);
-  recordAudit({
-    action: pub.isAdmin ? "admin_login" : "customer_login",
-    actorEmail: pub.email, actorId: pub.id, isAdmin: pub.isAdmin,
-    detail: remember ? "Remembered session (30d)" : "Standard session (1h)",
+// Build the User object from a Supabase auth user + cached extras + role.
+async function hydrateUser(authUser: { id: string; email?: string | null; user_metadata?: any }): Promise<User> {
+  const userId = authUser.id;
+  // role lookup (RLS: users can read their own row in user_roles)
+  let isAdmin = false;
+  try {
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    isAdmin = !!roles?.some((r) => r.role === "admin");
+  } catch { /* ignore */ }
+
+  // profile (name) — may not exist yet on first sign-in
+  let name = (authUser.user_metadata?.name as string | undefined) ?? "";
+  try {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", userId)
+      .maybeSingle();
+    if (prof?.name) name = prof.name;
+  } catch { /* ignore */ }
+
+  const extras = getExtras(userId);
+  return {
+    id: userId,
+    email: authUser.email ?? "",
+    name: name || (authUser.email?.split("@")[0] ?? ""),
+    isAdmin,
+    ...extras,
+  };
+}
+
+async function syncCurrentUser(authUser: { id: string; email?: string | null; user_metadata?: any } | null) {
+  if (!authUser) { write(KEYS.user, null); return null; }
+  const u = await hydrateUser(authUser);
+  write(KEYS.user, u);
+  return u;
+}
+
+let bootstrapped = false;
+export function bootstrapAuth() {
+  if (bootstrapped || typeof window === "undefined") return;
+  bootstrapped = true;
+  // Initial hydrate
+  supabase.auth.getUser().then(({ data }) => { void syncCurrentUser(data.user ?? null); });
+  // Keep cache in sync. Filter to identity transitions only.
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "TOKEN_REFRESHED") return;
+    if (event === "SIGNED_OUT") { write(KEYS.user, null); return; }
+    void syncCurrentUser(session?.user ?? null);
   });
-  return pub;
+}
+
+export const signUp = async (
+  email: string, password: string, name: string, _remember = false,
+): Promise<User | { error: string }> => {
+  const emailRedirectTo = typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: { data: { name }, emailRedirectTo },
+  });
+  if (error) return { error: error.message };
+  if (!data.user) return { error: "Signup failed" };
+  // Make the very first signup an admin (no-op afterwards).
+  try { await supabase.rpc("claim_admin_if_none"); } catch { /* ignore */ }
+  // Ensure profile name is set (trigger may have used empty metadata).
+  try {
+    await supabase.from("profiles").upsert({ id: data.user.id, email: data.user.email ?? email, name });
+  } catch { /* ignore */ }
+  const u = await syncCurrentUser(data.user);
+  if (u) {
+    recordAudit({
+      action: u.isAdmin ? "admin_login" : "customer_login",
+      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
+      detail: "Account created",
+    });
+  }
+  return u ?? { error: "Signup failed" };
 };
-export const signOut = () => {
+
+export const signIn = async (
+  email: string, password: string, remember = false,
+): Promise<User | { error: string }> => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error || !data.user) {
+    recordAudit({ action: "admin_login_failed", actorEmail: email, detail: error?.message ?? "Invalid credentials" });
+    return { error: error?.message ?? "Invalid credentials" };
+  }
+  const u = await syncCurrentUser(data.user);
+  if (u) {
+    recordAudit({
+      action: u.isAdmin ? "admin_login" : "customer_login",
+      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
+      detail: remember ? "Sign-in (remembered)" : "Sign-in",
+    });
+  }
+  return u ?? { error: "Sign-in failed" };
+};
+
+export const signOut = async () => {
   const cur = read<User | null>(KEYS.user, null);
   if (cur) {
     recordAudit({
       action: "sign_out", actorEmail: cur.email, actorId: cur.id, isAdmin: cur.isAdmin,
     });
   }
-  clearSession();
+  await supabase.auth.signOut();
+  write(KEYS.user, null);
 };
 
-// --- Password reset (token-based). Sends via configured provider when available;
-// otherwise returns the URL so the caller can display a copy-link fallback. ---
+// --- Password reset (Supabase native) ---
 export const requestPasswordReset = async (
   email: string,
   opts?: { isAdmin?: boolean; origin?: string },
-): Promise<
-  | { token: string; expiresAt: number; emailed: boolean; resetUrl: string }
-  | { error: string }
-> => {
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const u = users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-  if (!u) {
-    recordAudit({ action: "password_reset_failed", actorEmail: email, detail: "Unknown account" });
-    return { error: "No account with that email" };
-  }
-  const token = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
-  const expiresAt = Date.now() + RESET_TOKEN_MS;
-  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
-  tokens[token] = { userId: u.id, expiresAt };
-  write(KEYS.resetTokens, tokens);
-
+): Promise<{ emailed: true } | { error: string }> => {
   const origin = opts?.origin ?? (typeof window !== "undefined" ? window.location.origin : "");
   const isAdmin = !!opts?.isAdmin;
-  const resetUrl = `${origin}/reset-password?token=${token}${isAdmin ? "&admin=true" : ""}`;
-
-  let emailed = false;
-  if (isEmailConfigured()) {
-    const r = await sendEmail(buildResetEmail({ to: u.email, resetUrl, isAdmin }));
-    emailed = r.ok;
-    recordAudit({
-      action: "password_reset_requested",
-      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
-      detail: r.ok ? `Emailed via ${r.provider}` : `Email failed: ${r.error}`,
-    });
-  } else {
-    recordAudit({
-      action: "password_reset_requested",
-      actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
-      detail: "Email not configured — link shown in browser",
-    });
+  const redirectTo = `${origin}/reset-password${isAdmin ? "?admin=true" : ""}`;
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+  if (error) {
+    recordAudit({ action: "password_reset_failed", actorEmail: email, detail: error.message });
+    return { error: error.message };
   }
-  return { token, expiresAt, emailed, resetUrl };
+  recordAudit({
+    action: "password_reset_requested",
+    actorEmail: email, isAdmin,
+    detail: "Reset link emailed",
+  });
+  return { emailed: true };
 };
 
-export const verifyResetToken = (token: string): { ok: true; email: string } | { error: string } => {
-  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
-  const t = tokens[token];
-  if (!t) return { error: "Invalid or expired token" };
-  if (Date.now() > t.expiresAt) return { error: "Token expired" };
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const u = users.find((x) => x.id === t.userId);
-  if (!u) return { error: "User not found" };
-  return { ok: true, email: u.email };
+// In the new flow the user lands on /reset-password from the email link with
+// an active recovery session — no token to verify in app code.
+export const verifyResetToken = (_token: string): { ok: true; email: string } | { error: string } => {
+  return { error: "Use the email link to reset your password" };
 };
 
-export const resetPasswordWithToken = (token: string, newPw: string): { ok: true } | { error: string } => {
-  if (newPw.length < 6) return { error: "Password must be at least 6 characters" };
-  const tokens = read<Record<string, ResetTokenRecord>>(KEYS.resetTokens, {});
-  const t = tokens[token];
-  if (!t || Date.now() > t.expiresAt) {
-    recordAudit({ action: "password_reset_failed", detail: "Invalid or expired token" });
-    return { error: "Invalid or expired token" };
-  }
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const u = users.find((x) => x.id === t.userId);
-  if (!u) return { error: "User not found" };
-  u.password = newPw;
-  write(KEYS.users, users);
-  delete tokens[token];
-  write(KEYS.resetTokens, tokens);
+export const resetPasswordWithToken = async (
+  _token: string, newPw: string,
+): Promise<{ ok: true } | { error: string }> => {
+  if (newPw.length < 8) return { error: "Password must be at least 8 characters" };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Recovery session expired — request a new link" };
+  const { error } = await supabase.auth.updateUser({ password: newPw });
+  if (error) return { error: error.message };
   recordAudit({
     action: "password_reset_used",
-    actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
-    detail: "Password updated via reset token",
+    actorEmail: user.email ?? undefined, actorId: user.id,
+    detail: "Password updated via Supabase recovery",
   });
   return { ok: true };
 };
 
 // --- Profile / addresses / prefs / notifications / loyalty ---
+// Name updates persist to the `profiles` table; everything else lives in
+// the per-user extras cache. Email is read-only here (managed via Supabase).
 const persistUser = (u: User) => {
   write(KEYS.user, u);
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const i = users.findIndex((x) => x.id === u.id);
-  if (i >= 0) {
-    users[i] = { ...users[i], ...u };
-    write(KEYS.users, users);
-  }
+  const extras: ProfileExtras = {
+    phone: u.phone, avatar: u.avatar, bio: u.bio, birthday: u.birthday,
+    addresses: u.addresses, preferences: u.preferences,
+    notifications: u.notifications, loyaltyPoints: u.loyaltyPoints,
+  };
+  saveExtras(u.id, extras);
 };
 
 export const updateProfile = (patch: Partial<User>): User | null => {
@@ -321,21 +361,35 @@ export const updateProfile = (patch: Partial<User>): User | null => {
   if (!cur) return null;
   const updated: User = { ...cur, ...patch };
   persistUser(updated);
+  // Best-effort sync of `name` to the profiles table.
+  if (patch.name && patch.name !== cur.name) {
+    void supabase.from("profiles").update({ name: patch.name }).eq("id", cur.id);
+  }
   return updated;
 };
 
-export const changePassword = (currentPw: string, newPw: string): { ok: true } | { error: string } => {
+export const changePassword = async (
+  currentPw: string, newPw: string,
+): Promise<{ ok: true } | { error: string }> => {
   const cur = getCurrentUser();
   if (!cur) return { error: "Not signed in" };
-  if (newPw.length < 6) return { error: "New password must be at least 6 characters" };
-  const users = read<StoredUser[]>(KEYS.users, []);
-  const u = users.find((x) => x.id === cur.id);
-  if (!u) return { error: "User not found" };
-  if (u.password !== currentPw) return { error: "Current password is incorrect" };
-  u.password = newPw;
-  write(KEYS.users, users);
+  if (newPw.length < 8) return { error: "New password must be at least 8 characters" };
+  // Re-authenticate with the current password to prove ownership.
+  const { error: signinErr } = await supabase.auth.signInWithPassword({
+    email: cur.email, password: currentPw,
+  });
+  if (signinErr) return { error: "Current password is incorrect" };
+  const { error } = await supabase.auth.updateUser({ password: newPw });
+  if (error) return { error: error.message };
+  recordAudit({
+    action: "password_reset_used",
+    actorEmail: cur.email, actorId: cur.id, isAdmin: cur.isAdmin,
+    detail: "Password changed from account settings",
+  });
   return { ok: true };
 };
+
+
 
 export const getAddresses = (): Address[] => getCurrentUser()?.addresses ?? [];
 
@@ -803,8 +857,9 @@ export function useHydrated() {
 }
 
 export const useEnsureSeeded = () => {
-  useEffect(() => { ensureSeeded(); }, []);
+  useEffect(() => { ensureSeeded(); bootstrapAuth(); }, []);
 };
+
 
 export const formatPrice = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);

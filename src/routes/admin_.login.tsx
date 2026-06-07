@@ -31,19 +31,18 @@ function AdminLogin() {
     else toast.error("This account doesn't have admin access");
   }, [user, search, navigate]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.email || !form.password) return toast.error("Email and password required");
     setBusy(true);
-    setTimeout(() => {
-      const r = signIn(form.email.trim(), form.password, remember);
-      setBusy(false);
-      if ("error" in r) return toast.error(r.error);
-      if (!r.isAdmin) return toast.error("This account doesn't have admin access");
-      toast.success(`Welcome back, ${r.name.split(" ")[0]}`);
-      navigate({ to: search.redirect ?? "/admin" as any });
-    }, 300);
+    const r = await signIn(form.email.trim(), form.password, remember);
+    setBusy(false);
+    if ("error" in r) return toast.error(r.error);
+    if (!r.isAdmin) return toast.error("This account doesn't have admin access");
+    toast.success(`Welcome back, ${r.name.split(" ")[0]}`);
+    navigate({ to: search.redirect ?? "/admin" as any });
   };
+
 
   return (
     <Layout>
