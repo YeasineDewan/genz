@@ -1,10 +1,12 @@
-// Tiny localStorage-backed store. Auth migration to Supabase is in progress —
-// see src/lib/auth.functions.ts. This file will be refactored to use Supabase
-// Auth in the next iteration; for now it continues to use localStorage.
+// Auth is now backed by Supabase Auth — sessions, passwords, and roles all
+// live server-side. Per-user "extras" that aren't on the auth user yet
+// (addresses, preferences, notifications, loyalty points, avatar, bio,
+// birthday, phone) are kept in a localStorage cache keyed by Supabase
+// `user.id`. Nothing sensitive is stored client-side.
 import { useEffect, useState, useCallback, useMemo, useSyncExternalStore } from "react";
 import { seedProducts } from "./seed";
 import { recordAudit } from "./audit";
-import { sendEmail, buildResetEmail, isEmailConfigured } from "./email-config";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
@@ -12,11 +14,12 @@ import type {
   Address, UserPreferences, Notification,
 } from "./types";
 
+
 const KEYS = {
   products: "genz.products",
   cart: "genz.cart",
-  user: "genz.user",
-  users: "genz.users",
+  user: "genz.user",                // cached User object for current session
+  profiles: "genz.profileExtras",   // Record<userId, ProfileExtras>
   orders: "genz.orders",
   categories: "genz.categories",
   funnel: "genz.funnel",
@@ -26,17 +29,14 @@ const KEYS = {
   recent: "genz.recent",
   coupons: "genz.coupons",
   appliedCoupon: "genz.appliedCoupon",
-  session: "genz.session",
-  resetTokens: "genz.resetTokens",
 } as const;
 
-// Session timeouts (ms)
-export const SESSION_MS_DEFAULT = 60 * 60 * 1000;          // 1h
-export const SESSION_MS_REMEMBER = 30 * 24 * 60 * 60 * 1000; // 30d
-export const RESET_TOKEN_MS = 30 * 60 * 1000;              // 30min
+// Per-user extras not yet stored in Supabase. Keyed by Supabase user.id.
+type ProfileExtras = Pick<
+  User,
+  "phone" | "avatar" | "bio" | "birthday" | "addresses" | "preferences" | "notifications" | "loyaltyPoints"
+>;
 
-interface SessionRecord { userId: string; expiresAt: number; remember: boolean; }
-interface ResetTokenRecord { userId: string; expiresAt: number; }
 
 export const defaultCategories: CategoryDef[] = [
   { id: "c-tops", slug: "tops", name: "Tops", emoji: "👕" },
