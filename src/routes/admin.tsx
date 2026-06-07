@@ -1902,9 +1902,6 @@ function EmailSettings() {
     if (draft.provider !== "disabled") {
       if (!draft.fromEmail || !/.+@.+\..+/.test(draft.fromEmail)) return toast.error("Valid from-email required");
       if (!draft.webhookUrl || !/^https?:\/\//.test(draft.webhookUrl)) return toast.error("Webhook URL must start with http(s)://");
-      if (draft.provider === "smtp") {
-        if (!draft.smtpHost || !draft.smtpPort) return toast.error("SMTP host and port required");
-      }
     }
     saveEmailConfig(draft);
     recordAudit({
@@ -1913,6 +1910,7 @@ function EmailSettings() {
     });
     toast.success("Email settings saved");
   };
+
 
   const onTest = async () => {
     if (!testTo) return toast.error("Enter a test recipient email");
@@ -1952,9 +1950,9 @@ function EmailSettings() {
           <select value={draft.provider} onChange={(e) => setDraft({ ...draft, provider: e.target.value as EmailProvider })}
             className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none">
             <option value="disabled">Disabled (show copy link)</option>
-            <option value="webhook">Generic webhook (Resend, Zapier, your API)</option>
-            <option value="smtp">SMTP via relay</option>
+            <option value="webhook">Server-side relay (your serverless function / Resend / Zapier)</option>
           </select>
+
         </label>
         <label className="block">
           <div className="text-xs font-bold uppercase mb-1">From name</div>
@@ -1975,59 +1973,20 @@ function EmailSettings() {
       </div>
 
       {draft.provider !== "disabled" && (
-        <>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="block sm:col-span-2">
-              <div className="text-xs font-bold uppercase mb-1">Relay / webhook URL</div>
-              <input value={draft.webhookUrl ?? ""} onChange={(e) => setDraft({ ...draft, webhookUrl: e.target.value })}
-                placeholder="https://your-api.example.com/send"
-                className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none font-mono text-sm"/>
-            </label>
-            <label className="block sm:col-span-2">
-              <div className="text-xs font-bold uppercase mb-1">Shared secret (sent as X-Webhook-Secret)</div>
-              <input type="password" value={draft.webhookSecret ?? ""} onChange={(e) => setDraft({ ...draft, webhookSecret: e.target.value })}
-                placeholder="optional but recommended"
-                className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none font-mono text-sm"/>
-            </label>
-          </div>
-
-          {draft.provider === "smtp" && (
-            <div className="rounded-xl border-[3px] border-ink bg-pop-yellow/30 p-4 space-y-3">
-              <div className="text-xs font-bold uppercase">SMTP credentials (forwarded to relay)</div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <label className="block">
-                  <div className="text-[10px] font-bold uppercase mb-1">Host</div>
-                  <input value={draft.smtpHost ?? ""} onChange={(e) => setDraft({ ...draft, smtpHost: e.target.value })}
-                    placeholder="smtp.mailgun.org"
-                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
-                </label>
-                <label className="block">
-                  <div className="text-[10px] font-bold uppercase mb-1">Port</div>
-                  <input type="number" value={draft.smtpPort ?? 587} onChange={(e) => setDraft({ ...draft, smtpPort: +e.target.value })}
-                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
-                </label>
-                <label className="block">
-                  <div className="text-[10px] font-bold uppercase mb-1">Username</div>
-                  <input value={draft.smtpUser ?? ""} onChange={(e) => setDraft({ ...draft, smtpUser: e.target.value })}
-                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
-                </label>
-                <label className="block">
-                  <div className="text-[10px] font-bold uppercase mb-1">Password / API key</div>
-                  <input type="password" value={draft.smtpPassword ?? ""} onChange={(e) => setDraft({ ...draft, smtpPassword: e.target.value })}
-                    className="w-full rounded-lg border-2 border-ink bg-white px-3 py-2 outline-none text-sm"/>
-                </label>
-                <label className="inline-flex items-center gap-2 text-xs font-bold sm:col-span-2">
-                  <input type="checkbox" checked={!!draft.smtpSecure} onChange={(e) => setDraft({ ...draft, smtpSecure: e.target.checked })}/>
-                  Use TLS (recommended on port 465)
-                </label>
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Credentials are stored in this browser only and sent to the relay you control. Never paste credentials into a third-party webhook you don't trust.
-              </p>
-            </div>
-          )}
-        </>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block sm:col-span-2">
+            <div className="text-xs font-bold uppercase mb-1">Relay / webhook URL</div>
+            <input value={draft.webhookUrl ?? ""} onChange={(e) => setDraft({ ...draft, webhookUrl: e.target.value })}
+              placeholder="https://your-api.example.com/send"
+              className="w-full rounded-xl border-[3px] border-ink bg-white px-4 py-2.5 outline-none font-mono text-sm"/>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              SMTP passwords and shared secrets must live on your server, never in the browser. Authenticate this endpoint server-side
+              (origin check, signed token issued by your backend, IP allowlist, etc.).
+            </p>
+          </label>
+        </div>
       )}
+
 
       <div className="flex items-center gap-2 flex-wrap pt-2 border-t-2 border-ink/10">
         <button className="btn-pop"><Save size={16}/> Save settings</button>
