@@ -700,13 +700,14 @@ function ProfileTab() {
 /* ---------- Security ---------- */
 function SecurityTab() {
   const [cur, setCur] = useState(""); const [nw, setNw] = useState(""); const [cf, setCf] = useState("");
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (nw !== cf) { toast.error("Passwords don't match"); return; }
-    const r = changePassword(cur, nw);
+    const r = await changePassword(cur, nw);
     if ("error" in r) { toast.error(r.error); return; }
     toast.success("Password updated"); setCur(""); setNw(""); setCf("");
   };
+
   return (
     <div className="space-y-4">
       <PageHeader title="Security" subtitle="Manage your password and sessions"/>
