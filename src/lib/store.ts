@@ -83,20 +83,21 @@ function write<T>(key: string, val: T) {
 }
 void SERVER_SNAPSHOT;
 
-const SEED_VERSION = "2";
+const SEED_VERSION = "3";
 export function ensureSeeded() {
   if (typeof window === "undefined") return;
   const v = localStorage.getItem("genz.seedVersion");
   if (v !== SEED_VERSION) {
     write(KEYS.products, seedProducts);
     write(KEYS.categories, defaultCategories);
+    // Clean up legacy localStorage auth data from previous builds.
+    localStorage.removeItem("genz.users");
+    localStorage.removeItem("genz.session");
+    localStorage.removeItem("genz.resetTokens");
     localStorage.setItem("genz.seedVersion", SEED_VERSION);
   }
-  if (!localStorage.getItem(KEYS.users)) {
-    write(KEYS.users, []);
-  }
-
 }
+
 
 // --- Categories ---
 export const getCategories = (): CategoryDef[] => read(KEYS.categories, defaultCategories);
