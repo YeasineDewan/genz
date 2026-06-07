@@ -1,24 +1,17 @@
-// Email delivery config — supports a generic webhook (Zapier/Make/n8n/your API)
-// and SMTP-style fields (host, port, username, password, from).
-// In a static-only build we can't open raw SMTP from the browser, so the
-// "smtp" mode posts the same payload to your configured relay endpoint —
-// you wire the relay to actually send via SMTP. The "webhook" mode just
-// posts to any URL you specify (e.g. a serverless function).
+// Email delivery config — sensitive credentials (SMTP passwords, webhook
+// secrets) MUST live server-side, never in the browser. This module now only
+// holds non-sensitive display fields and a public webhook URL. Real sending
+// must be done via a server function that reads its secrets from
+// Lovable Cloud Secrets and signs requests server-side.
 import { useSyncExternalStore } from "react";
 
-export type EmailProvider = "webhook" | "smtp" | "disabled";
+export type EmailProvider = "webhook" | "disabled";
 
 export interface EmailConfig {
   provider: EmailProvider;
   fromName: string;
   fromEmail: string;
-  webhookUrl?: string;
-  webhookSecret?: string;
-  smtpHost?: string;
-  smtpPort?: number;
-  smtpUser?: string;
-  smtpPassword?: string;
-  smtpSecure?: boolean;
+  webhookUrl?: string;   // public endpoint of your server-side relay
   replyTo?: string;
   updatedAt?: number;
 }
@@ -37,12 +30,27 @@ const subscribe = (l: Listener) => { listeners.add(l); return () => listeners.de
 
 const cache = { raw: null as string | null, value: DEFAULT };
 
+// Defensive sanitiser — strips any legacy secret fields that might still be
+// sitting in a user's localStorage from previous builds.
+function sanitize(input: any): EmailConfig {
+  const safe: EmailConfig = {
+    provider: input?.provider === "webhook" ? "webhook" : "disabled",
+    fromName: typeof input?.fromName === "string" ? input.fromName : DEFAULT.fromName,
+    fromEmail: typeof input?.fromEmail === "string" ? input.fromEmail : DEFAULT.fromEmail,
+    webhookUrl: typeof input?.webhookUrl === "string" ? input.webhookUrl : undefined,
+    replyTo: typeof input?.replyTo === "string" ? input.replyTo : undefined,
+    updatedAt: typeof input?.updatedAt === "number" ? input.updatedAt : undefined,
+  };
+  return safe;
+}
+
 export function getEmailConfig(): EmailConfig {
   if (typeof window === "undefined") return DEFAULT;
   try {
     const raw = localStorage.getItem(KEY);
     if (cache.raw === raw) return cache.value;
-    const value = raw ? { ...DEFAULT, ...JSON.parse(raw) } : DEFAULT;
+    const parsed = raw ? JSON.parse(raw) : DEFAULT;
+    const value = sanitize(parsed);
     cache.raw = raw;
     cache.value = value;
     return value;
@@ -50,7 +58,7 @@ export function getEmailConfig(): EmailConfig {
 }
 
 export function saveEmailConfig(cfg: EmailConfig) {
-  const next = { ...cfg, updatedAt: Date.now() };
+  const next = { ...sanitize(cfg), updatedAt: Date.now() };
   const raw = JSON.stringify(next);
   localStorage.setItem(KEY, raw);
   cache.raw = raw;
@@ -62,7 +70,7 @@ export const useEmailConfig = (): EmailConfig =>
   useSyncExternalStore(subscribe, getEmailConfig, () => DEFAULT);
 
 export const isEmailConfigured = (cfg = getEmailConfig()) =>
-  cfg.provider !== "disabled" && !!cfg.webhookUrl && !!cfg.fromEmail;
+  cfg.provider === "webhook" && !!cfg.webhookUrl && !!cfg.fromEmail;
 
 export interface SendEmailPayload {
   to: string;
@@ -74,6 +82,9 @@ export interface SendEmailPayload {
 
 export type SendResult = { ok: true; provider: EmailProvider } | { ok: false; error: string };
 
+// Posts to a PUBLIC webhook only. No secrets are attached client-side; your
+// server-side relay should authenticate the caller via its own mechanism
+// (origin check, signed token issued by your backend, etc.).
 export async function sendEmail(payload: SendEmailPayload): Promise<SendResult> {
   const cfg = getEmailConfig();
   if (!isEmailConfigured(cfg)) return { ok: false, error: "Email is not configured" };
@@ -82,18 +93,12 @@ export async function sendEmail(payload: SendEmailPayload): Promise<SendResult> 
       provider: cfg.provider,
       from: { name: cfg.fromName, email: cfg.fromEmail },
       replyTo: cfg.replyTo || undefined,
-      smtp: cfg.provider === "smtp" ? {
-        host: cfg.smtpHost, port: cfg.smtpPort, user: cfg.smtpUser,
-        password: cfg.smtpPassword, secure: !!cfg.smtpSecure,
-      } : undefined,
       ...payload,
     };
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (cfg.webhookSecret) headers["X-Webhook-Secret"] = cfg.webhookSecret;
     const res = await fetch(cfg.webhookUrl!, {
       method: "POST",
       mode: "cors",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: `Relay returned ${res.status}` };

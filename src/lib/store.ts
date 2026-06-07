@@ -93,8 +93,9 @@ export function ensureSeeded() {
     localStorage.setItem("genz.seedVersion", SEED_VERSION);
   }
   if (!localStorage.getItem(KEYS.users)) {
-    write(KEYS.users, [{ id: "admin", email: "admin@genz.shop", password: "admin123", name: "Admin", isAdmin: true }]);
+    write(KEYS.users, []);
   }
+
 }
 
 // --- Categories ---
