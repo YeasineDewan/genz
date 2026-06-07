@@ -22,19 +22,18 @@ function SignUp() {
   const strong = isPasswordAcceptable(form.password);
   const canSubmit = !!form.name.trim() && !!form.email.trim() && strong && matches && !busy;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!strong) return toast.error("Please choose a stronger password");
     if (form.password !== form.confirm) return toast.error("Passwords don't match");
     setBusy(true);
-    setTimeout(() => {
-      const r = signUp(form.email.trim(), form.password, form.name.trim());
-      setBusy(false);
-      if ("error" in r) return toast.error(r.error);
-      toast.success(`Welcome, ${r.name.split(" ")[0]}!`);
-      navigate({ to: "/account" });
-    }, 250);
+    const r = await signUp(form.email.trim(), form.password, form.name.trim());
+    setBusy(false);
+    if ("error" in r) return toast.error(r.error);
+    toast.success(`Welcome, ${r.name.split(" ")[0]}!`);
+    navigate({ to: r.isAdmin ? ("/admin" as any) : "/account" });
   };
+
 
   return (
     <Layout>

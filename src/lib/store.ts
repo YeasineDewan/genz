@@ -857,8 +857,9 @@ export function useHydrated() {
 }
 
 export const useEnsureSeeded = () => {
-  useEffect(() => { ensureSeeded(); }, []);
+  useEffect(() => { ensureSeeded(); bootstrapAuth(); }, []);
 };
+
 
 export const formatPrice = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
