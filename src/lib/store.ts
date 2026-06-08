@@ -240,7 +240,8 @@ export function bootstrapAuth() {
 }
 
 export const signUp = async (
-  email: string, password: string, name: string, _remember = false,
+  email: string, password: string, name: string,
+  opts?: { claimAdmin?: boolean },
 ): Promise<User | { error: string }> => {
   const emailRedirectTo = typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
   const { data, error } = await supabase.auth.signUp({
@@ -250,8 +251,11 @@ export const signUp = async (
   });
   if (error) return { error: error.message };
   if (!data.user) return { error: "Signup failed" };
-  // Make the very first signup an admin (no-op afterwards).
-  try { await supabase.rpc("claim_admin_if_none"); } catch { /* ignore */ }
+  // Only the dedicated admin-setup flow attempts to claim the admin role.
+  // Regular customer signups never gain elevated privileges.
+  if (opts?.claimAdmin) {
+    try { await supabase.rpc("claim_admin_if_none"); } catch { /* ignore */ }
+  }
   // Ensure profile name is set (trigger may have used empty metadata).
   try {
     await supabase.from("profiles").upsert({ id: data.user.id, email: data.user.email ?? email, name });
@@ -261,7 +265,7 @@ export const signUp = async (
     recordAudit({
       action: u.isAdmin ? "admin_login" : "customer_login",
       actorEmail: u.email, actorId: u.id, isAdmin: u.isAdmin,
-      detail: "Account created",
+      detail: opts?.claimAdmin ? "Admin account provisioned" : "Customer account created",
     });
   }
   return u ?? { error: "Signup failed" };

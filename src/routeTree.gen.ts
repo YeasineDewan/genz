@@ -23,6 +23,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as WishlistShareRouteImport } from './routes/wishlist_.share'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
+import { Route as AdminSetupRouteImport } from './routes/admin_.setup'
 import { Route as AdminLoginRouteImport } from './routes/admin_.login'
 
 const WishlistRoute = WishlistRouteImport.update({
@@ -95,6 +96,11 @@ const OrderIdRoute = OrderIdRouteImport.update({
   path: '/order/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSetupRoute = AdminSetupRouteImport.update({
+  id: '/admin_/setup',
+  path: '/admin/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/admin_/login',
   path: '/admin/login',
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/wishlist': typeof WishlistRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/setup': typeof AdminSetupRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/wishlist': typeof WishlistRoute
   '/admin/login': typeof AdminLoginRoute
+  '/admin/setup': typeof AdminSetupRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/wishlist': typeof WishlistRoute
   '/admin_/login': typeof AdminLoginRoute
+  '/admin_/setup': typeof AdminSetupRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist_/share': typeof WishlistShareRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/wishlist'
     | '/admin/login'
+    | '/admin/setup'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/wishlist'
     | '/admin/login'
+    | '/admin/setup'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/wishlist'
     | '/admin_/login'
+    | '/admin_/setup'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist_/share'
@@ -220,6 +232,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   WishlistRoute: typeof WishlistRoute
   AdminLoginRoute: typeof AdminLoginRoute
+  AdminSetupRoute: typeof AdminSetupRoute
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
   WishlistShareRoute: typeof WishlistShareRoute
@@ -325,6 +338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin_/setup': {
+      id: '/admin_/setup'
+      path: '/admin/setup'
+      fullPath: '/admin/setup'
+      preLoaderRoute: typeof AdminSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin_/login': {
       id: '/admin_/login'
       path: '/admin/login'
@@ -348,6 +368,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   WishlistRoute: WishlistRoute,
   AdminLoginRoute: AdminLoginRoute,
+  AdminSetupRoute: AdminSetupRoute,
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,
   WishlistShareRoute: WishlistShareRoute,
