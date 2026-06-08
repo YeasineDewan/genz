@@ -111,6 +111,12 @@ function AdminLogin() {
           <p className="text-[11px] text-center text-paper/70">
             Not staff? <Link to="/login" className="font-bold underline text-paper">Customer sign in</Link>
           </p>
+          <p className="text-[11px] text-center text-paper/60">
+            First-time setup?{" "}
+            <Link to="/admin/setup" className="font-bold underline text-paper">
+              Provision first admin
+            </Link>
+          </p>
 
         </motion.form>
       </section>
