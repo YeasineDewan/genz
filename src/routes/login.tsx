@@ -27,8 +27,9 @@ function Login() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.isAdmin) navigate({ to: "/admin" });
-    else if (search.redirect) window.location.href = search.redirect;
+    // Admins already signed in: bounce to admin dashboard (their proper home).
+    if (user.isAdmin) { navigate({ to: "/admin" }); return; }
+    if (search.redirect) window.location.href = search.redirect;
     else navigate({ to: "/account" });
   }, [user, search, navigate]);
 
@@ -39,9 +40,16 @@ function Login() {
     const r = await signIn(form.email.trim(), form.password, remember);
     setBusy(false);
     if ("error" in r) return toast.error(r.error);
+    // Strict separation: admins cannot use the customer portal.
+    if (r.isAdmin) {
+      const { signOut } = await import("@/lib/store");
+      await signOut();
+      toast.error("Admin accounts must use the admin portal");
+      navigate({ to: "/admin/login" as any });
+      return;
+    }
     toast.success(`Welcome back, ${r.name.split(" ")[0]} 👋`);
-    if (r.isAdmin) navigate({ to: "/admin" });
-    else if (search.redirect) window.location.href = search.redirect;
+    if (search.redirect) window.location.href = search.redirect;
     else navigate({ to: "/account" });
   };
 
