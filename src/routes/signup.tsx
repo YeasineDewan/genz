@@ -31,7 +31,7 @@ function SignUp() {
     setBusy(false);
     if ("error" in r) return toast.error(r.error);
     toast.success(`Welcome, ${r.name.split(" ")[0]}!`);
-    navigate({ to: r.isAdmin ? ("/admin" as any) : "/account" });
+    navigate({ to: "/account" });
   };
 
 
