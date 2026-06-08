@@ -112,7 +112,7 @@ function SignUp() {
             Already have one? <Link to="/login" className="font-bold underline">Sign in</Link>
           </p>
           <p className="text-[10px] text-center text-muted-foreground flex items-center justify-center gap-1">
-            <ShieldCheck size={10}/> We never sell your data.
+            <ShieldCheck size={10}/> We never sell your data. Staff? <Link to="/admin/login" className="font-bold underline">Admin portal</Link>
           </p>
         </motion.form>
       </section>
