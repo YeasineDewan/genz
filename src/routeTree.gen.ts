@@ -23,8 +23,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as WishlistShareRouteImport } from './routes/wishlist_.share'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
+import { Route as ApiChatSupportRouteImport } from './routes/api/chat-support'
+import { Route as AdminSupportRouteImport } from './routes/admin_.support'
 import { Route as AdminSetupRouteImport } from './routes/admin_.setup'
 import { Route as AdminLoginRouteImport } from './routes/admin_.login'
+import { Route as ApiPublicProvisionDemoRouteImport } from './routes/api/public/provision-demo'
 
 const WishlistRoute = WishlistRouteImport.update({
   id: '/wishlist',
@@ -96,6 +99,16 @@ const OrderIdRoute = OrderIdRouteImport.update({
   path: '/order/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiChatSupportRoute = ApiChatSupportRouteImport.update({
+  id: '/api/chat-support',
+  path: '/api/chat-support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSupportRoute = AdminSupportRouteImport.update({
+  id: '/admin_/support',
+  path: '/admin/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSetupRoute = AdminSetupRouteImport.update({
   id: '/admin_/setup',
   path: '/admin/setup',
@@ -104,6 +117,11 @@ const AdminSetupRoute = AdminSetupRouteImport.update({
 const AdminLoginRoute = AdminLoginRouteImport.update({
   id: '/admin_/login',
   path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicProvisionDemoRoute = ApiPublicProvisionDemoRouteImport.update({
+  id: '/api/public/provision-demo',
+  path: '/api/public/provision-demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -121,9 +139,12 @@ export interface FileRoutesByFullPath {
   '/wishlist': typeof WishlistRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/setup': typeof AdminSetupRoute
+  '/admin/support': typeof AdminSupportRoute
+  '/api/chat-support': typeof ApiChatSupportRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
+  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -139,9 +160,12 @@ export interface FileRoutesByTo {
   '/wishlist': typeof WishlistRoute
   '/admin/login': typeof AdminLoginRoute
   '/admin/setup': typeof AdminSetupRoute
+  '/admin/support': typeof AdminSupportRoute
+  '/api/chat-support': typeof ApiChatSupportRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
+  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -158,9 +182,12 @@ export interface FileRoutesById {
   '/wishlist': typeof WishlistRoute
   '/admin_/login': typeof AdminLoginRoute
   '/admin_/setup': typeof AdminSetupRoute
+  '/admin_/support': typeof AdminSupportRoute
+  '/api/chat-support': typeof ApiChatSupportRoute
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist_/share': typeof WishlistShareRoute
+  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -178,9 +205,12 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/admin/login'
     | '/admin/setup'
+    | '/admin/support'
+    | '/api/chat-support'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
+    | '/api/public/provision-demo'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -196,9 +226,12 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/admin/login'
     | '/admin/setup'
+    | '/admin/support'
+    | '/api/chat-support'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
+    | '/api/public/provision-demo'
   id:
     | '__root__'
     | '/'
@@ -214,9 +247,12 @@ export interface FileRouteTypes {
     | '/wishlist'
     | '/admin_/login'
     | '/admin_/setup'
+    | '/admin_/support'
+    | '/api/chat-support'
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist_/share'
+    | '/api/public/provision-demo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -233,9 +269,12 @@ export interface RootRouteChildren {
   WishlistRoute: typeof WishlistRoute
   AdminLoginRoute: typeof AdminLoginRoute
   AdminSetupRoute: typeof AdminSetupRoute
+  AdminSupportRoute: typeof AdminSupportRoute
+  ApiChatSupportRoute: typeof ApiChatSupportRoute
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
   WishlistShareRoute: typeof WishlistShareRoute
+  ApiPublicProvisionDemoRoute: typeof ApiPublicProvisionDemoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -338,6 +377,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/chat-support': {
+      id: '/api/chat-support'
+      path: '/api/chat-support'
+      fullPath: '/api/chat-support'
+      preLoaderRoute: typeof ApiChatSupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin_/support': {
+      id: '/admin_/support'
+      path: '/admin/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AdminSupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin_/setup': {
       id: '/admin_/setup'
       path: '/admin/setup'
@@ -350,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/login'
       fullPath: '/admin/login'
       preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/provision-demo': {
+      id: '/api/public/provision-demo'
+      path: '/api/public/provision-demo'
+      fullPath: '/api/public/provision-demo'
+      preLoaderRoute: typeof ApiPublicProvisionDemoRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -369,19 +429,13 @@ const rootRouteChildren: RootRouteChildren = {
   WishlistRoute: WishlistRoute,
   AdminLoginRoute: AdminLoginRoute,
   AdminSetupRoute: AdminSetupRoute,
+  AdminSupportRoute: AdminSupportRoute,
+  ApiChatSupportRoute: ApiChatSupportRoute,
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,
   WishlistShareRoute: WishlistShareRoute,
+  ApiPublicProvisionDemoRoute: ApiPublicProvisionDemoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}
