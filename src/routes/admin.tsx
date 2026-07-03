@@ -99,6 +99,9 @@ function Admin() {
               </nav>
 
               <div className="sticker rounded-2xl bg-pop-yellow p-3 space-y-2">
+                <Link to="/admin/support" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-pop-pink text-white px-3 py-2 text-sm font-bold">
+                  💬 Support Inbox
+                </Link>
                 <Link to="/" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-bold">
                   View storefront
                 </Link>
