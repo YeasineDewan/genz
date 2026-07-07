@@ -18,7 +18,7 @@ export const Route = createFileRoute("/admin_/login")({
 
 function AdminLogin() {
   const navigate = useNavigate();
-  const search = useSearch({ from: "/admin/login" }) as Search;
+  const search = useSearch({ from: "/admin_/login" }) as Search;
   const user = useUser();
   const [form, setForm] = useState({ email: "", password: "" });
   const [remember, setRemember] = useState(false);
