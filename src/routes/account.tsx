@@ -310,6 +310,7 @@ function OrdersTab() {
 function OrderRow({ order: o }: { order: Order }) {
   const products = useProducts();
   const canCancel = ["pending", "processing"].includes(o.status);
+  const invoiceEligible = ["shipped", "out_for_delivery", "delivered"].includes(o.status);
   return (
     <div className="sticker rounded-2xl bg-white p-4">
       <div className="flex items-center gap-3 mb-3">
