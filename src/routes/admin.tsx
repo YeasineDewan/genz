@@ -176,6 +176,46 @@ function SessionBadge() {
   );
 }
 
+function SupportInboxLink() {
+  const [count, setCount] = useState(0);
+  const seen = useAdminSeen();
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data: convs } = await supabase
+        .from("support_conversations")
+        .select("id,last_message_at,status");
+      if (cancelled || !convs) return;
+      const ids = convs.map((c) => c.id);
+      if (!ids.length) { setCount(0); return; }
+      const { data: msgs } = await supabase
+        .from("support_messages")
+        .select("conversation_id,sender,created_at")
+        .in("conversation_id", ids)
+        .in("sender", ["user", "ai"])
+        .order("created_at", { ascending: false });
+      const latest: Record<string, number> = {};
+      (msgs ?? []).forEach((m) => {
+        if (latest[m.conversation_id]) return;
+        latest[m.conversation_id] = new Date(m.created_at).getTime();
+      });
+      const unread = convs.filter((c) => (latest[c.id] ?? 0) > (seen[c.id] ?? 0)).length;
+      setCount(unread);
+    };
+    void load();
+    const ch = supabase.channel("admin-sidebar-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_messages" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [seen]);
+  return (
+    <Link to="/admin/support" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-pop-pink text-white px-3 py-2 text-sm font-bold relative">
+      💬 Support Inbox
+      {count > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-white text-ink border-2 border-ink text-[10px] font-bold grid place-items-center">{count > 9 ? "9+" : count}</span>}
+    </Link>
+  );
+}
+
 /* ───────────── Dashboard ───────────── */
 
 function Dashboard() {
