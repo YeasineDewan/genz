@@ -353,8 +353,9 @@ function OrderRow({ order: o }: { order: Order }) {
             <X size={14}/> Cancel
           </button>
         )}
-        {o.status === "delivered" && (
-          <button onClick={() => toast.success("Invoice download coming soon")} className="text-sm font-bold px-3 py-1.5 rounded-full border-2 border-ink hover:bg-pop-yellow inline-flex items-center gap-1">
+        {invoiceEligible && (
+          <button onClick={() => { downloadInvoice(o, products); toast.success("Invoice downloaded"); }}
+            className="text-sm font-bold px-3 py-1.5 rounded-full border-2 border-ink hover:bg-pop-yellow inline-flex items-center gap-1">
             <Download size={14}/> Invoice
           </button>
         )}
