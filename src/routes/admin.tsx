@@ -26,8 +26,12 @@ import {
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
   LogOut, Clock, ShieldCheck, Menu, ShieldAlert, Mail, Send, RefreshCcw, Filter,
+  Search, Download, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadInvoice } from "@/lib/invoice";
+import { supabase } from "@/integrations/supabase/client";
+import { useAdminSeen } from "@/lib/support-unread";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard — GenZ" }, { name: "robots", content: "noindex,nofollow" }] }),
