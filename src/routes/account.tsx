@@ -19,6 +19,7 @@ import {
   AlertCircle, Sparkles, Award, Gift, Download, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadInvoice } from "@/lib/invoice";
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "My account — GenZ" }] }),
