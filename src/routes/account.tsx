@@ -19,6 +19,7 @@ import {
   AlertCircle, Sparkles, Award, Gift, Download, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadInvoice } from "@/lib/invoice";
 
 export const Route = createFileRoute("/account")({
   head: () => ({ meta: [{ title: "My account — GenZ" }] }),
@@ -309,6 +310,7 @@ function OrdersTab() {
 function OrderRow({ order: o }: { order: Order }) {
   const products = useProducts();
   const canCancel = ["pending", "processing"].includes(o.status);
+  const invoiceEligible = ["shipped", "out_for_delivery", "delivered"].includes(o.status);
   return (
     <div className="sticker rounded-2xl bg-white p-4">
       <div className="flex items-center gap-3 mb-3">
@@ -351,8 +353,9 @@ function OrderRow({ order: o }: { order: Order }) {
             <X size={14}/> Cancel
           </button>
         )}
-        {o.status === "delivered" && (
-          <button onClick={() => toast.success("Invoice download coming soon")} className="text-sm font-bold px-3 py-1.5 rounded-full border-2 border-ink hover:bg-pop-yellow inline-flex items-center gap-1">
+        {invoiceEligible && (
+          <button onClick={() => { downloadInvoice(o, products); toast.success("Invoice downloaded"); }}
+            className="text-sm font-bold px-3 py-1.5 rounded-full border-2 border-ink hover:bg-pop-yellow inline-flex items-center gap-1">
             <Download size={14}/> Invoice
           </button>
         )}

@@ -26,8 +26,12 @@ import {
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
   LogOut, Clock, ShieldCheck, Menu, ShieldAlert, Mail, Send, RefreshCcw, Filter,
+  Search, Download, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
+import { downloadInvoice } from "@/lib/invoice";
+import { supabase } from "@/integrations/supabase/client";
+import { useAdminSeen } from "@/lib/support-unread";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard — GenZ" }, { name: "robots", content: "noindex,nofollow" }] }),
@@ -99,9 +103,7 @@ function Admin() {
               </nav>
 
               <div className="sticker rounded-2xl bg-pop-yellow p-3 space-y-2">
-                <Link to="/admin/support" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-pop-pink text-white px-3 py-2 text-sm font-bold">
-                  💬 Support Inbox
-                </Link>
+                <SupportInboxLink />
                 <Link to="/" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-white px-3 py-2 text-sm font-bold">
                   View storefront
                 </Link>
@@ -171,6 +173,46 @@ function SessionBadge() {
     <div className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-paper/10 border border-paper/30 rounded-full px-2 py-1">
       <Clock size={10}/> Session {left}
     </div>
+  );
+}
+
+function SupportInboxLink() {
+  const [count, setCount] = useState(0);
+  const seen = useAdminSeen();
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data: convs } = await supabase
+        .from("support_conversations")
+        .select("id,last_message_at,status");
+      if (cancelled || !convs) return;
+      const ids = convs.map((c) => c.id);
+      if (!ids.length) { setCount(0); return; }
+      const { data: msgs } = await supabase
+        .from("support_messages")
+        .select("conversation_id,sender,created_at")
+        .in("conversation_id", ids)
+        .in("sender", ["user", "ai"])
+        .order("created_at", { ascending: false });
+      const latest: Record<string, number> = {};
+      (msgs ?? []).forEach((m) => {
+        if (latest[m.conversation_id]) return;
+        latest[m.conversation_id] = new Date(m.created_at).getTime();
+      });
+      const unread = convs.filter((c) => (latest[c.id] ?? 0) > (seen[c.id] ?? 0)).length;
+      setCount(unread);
+    };
+    void load();
+    const ch = supabase.channel("admin-sidebar-unread")
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_messages" }, () => void load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [seen]);
+  return (
+    <Link to="/admin/support" className="w-full inline-flex items-center justify-center gap-2 rounded-xl border-2 border-ink bg-pop-pink text-white px-3 py-2 text-sm font-bold relative">
+      💬 Support Inbox
+      {count > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-white text-ink border-2 border-ink text-[10px] font-bold grid place-items-center">{count > 9 ? "9+" : count}</span>}
+    </Link>
   );
 }
 
@@ -646,12 +688,54 @@ function Orders() {
   const orders = useOrders();
   const products = useProducts();
   const [filter, setFilter] = useState<OrderStatus | "all">("all");
+  const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [detailId, setDetailId] = useState<string | null>(null);
 
-  const filtered = filter === "all" ? orders : orders.filter((o) => o.status === filter);
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const fromMs = from ? new Date(from).getTime() : 0;
+    const toMs = to ? new Date(to).getTime() + 86400000 : Number.POSITIVE_INFINITY;
+    return orders.filter((o) => {
+      if (filter !== "all" && o.status !== filter) return false;
+      if (o.createdAt < fromMs || o.createdAt >= toMs) return false;
+      if (!needle) return true;
+      return (
+        o.id.toLowerCase().includes(needle) ||
+        o.shipping.name.toLowerCase().includes(needle) ||
+        (o.shipping.email ?? "").toLowerCase().includes(needle) ||
+        (o.trackingNumber ?? "").toLowerCase().includes(needle) ||
+        o.items.some((it) => products.find((p) => p.id === it.productId)?.name.toLowerCase().includes(needle))
+      );
+    });
+  }, [orders, filter, q, from, to, products]);
+
+  const revenue = filtered.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
+  const detailOrder = detailId ? orders.find((o) => o.id === detailId) : null;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="sticker rounded-2xl bg-white p-3 flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[220px] flex items-center gap-2 px-3 rounded-xl border-2 border-ink/20">
+          <Search size={16}/>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search order #, customer, email, tracking, product…"
+            className="flex-1 bg-transparent py-2 outline-none text-sm"/>
+        </div>
+        <label className="text-xs font-bold flex items-center gap-1">From
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+            className="ml-1 rounded-lg border-2 border-ink/20 px-2 py-1 text-sm"/>
+        </label>
+        <label className="text-xs font-bold flex items-center gap-1">To
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+            className="ml-1 rounded-lg border-2 border-ink/20 px-2 py-1 text-sm"/>
+        </label>
+        {(q || from || to) && (
+          <button onClick={() => { setQ(""); setFrom(""); setTo(""); }} className="chip text-xs">Clear</button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
         <button onClick={() => setFilter("all")} className={`chip ${filter === "all" ? "bg-pop-pink text-white" : ""}`}>All ({orders.length})</button>
         {ORDER_STATUSES.map((s) => {
           const n = orders.filter((o) => o.status === s).length;
@@ -661,20 +745,23 @@ function Orders() {
             </button>
           );
         })}
+        <div className="ml-auto text-sm font-bold">{filtered.length} shown · {formatPrice(revenue)} revenue</div>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No orders.</div>
+        <div className="sticker rounded-2xl bg-white p-10 text-center text-muted-foreground">No orders match.</div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((o) => <OrderRow key={o.id} o={o}/>)}
+          {filtered.map((o) => <OrderRow key={o.id} o={o} onDetails={() => setDetailId(o.id)}/>)}
         </div>
       )}
+
+      {detailOrder && <OrderDetailsModal order={detailOrder} onClose={() => setDetailId(null)}/>}
     </div>
   );
 }
 
-function OrderRow({ o }: { o: Order }) {
+function OrderRow({ o, onDetails }: { o: Order; onDetails: () => void }) {
   const products = useProducts();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -748,12 +835,9 @@ function OrderRow({ o }: { o: Order }) {
           >
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
           </select>
-          {!editing && (
-            <button onClick={() => setEditing(true)} className="chip mt-2 ml-2"><Edit3 size={12}/> Edit shipping</button>
-          )}
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2 items-center">
         {o.items.map((it, i) => {
           const p = products.find((x) => x.id === it.productId);
           if (!p) return null;
@@ -765,6 +849,109 @@ function OrderRow({ o }: { o: Order }) {
             </div>
           );
         })}
+        <div className="ml-auto flex gap-2">
+          <button onClick={onDetails} className="chip"><FileText size={12}/> Details</button>
+          {!editing && <button onClick={() => setEditing(true)} className="chip"><Edit3 size={12}/> Shipping</button>}
+          <button onClick={() => { downloadInvoice(o, products); toast.success("Invoice downloaded"); }} className="chip bg-pop-yellow">
+            <Download size={12}/> Invoice
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailsModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  const products = useProducts();
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/70 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border-[3px] border-ink bg-paper shadow-[8px_8px_0_rgba(0,0,0,0.9)]">
+        <div className="p-5 border-b-[3px] border-ink flex items-center justify-between bg-pop-yellow">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest">Order details</div>
+            <div className="font-display text-2xl">#{order.id.slice(0, 8).toUpperCase()}</div>
+            <div className="text-xs text-muted-foreground mt-1">{new Date(order.createdAt).toLocaleString()}</div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded hover:bg-ink/10" aria-label="Close"><X size={18}/></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="sticker rounded-xl bg-white p-3">
+              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Ship to</div>
+              <div className="font-bold text-sm">{order.shipping.name}</div>
+              {order.shipping.email && <div className="text-xs">{order.shipping.email}</div>}
+              {order.shipping.phone && <div className="text-xs">{order.shipping.phone}</div>}
+              <div className="text-xs mt-1">
+                {order.shipping.address}{order.shipping.address2 ? `, ${order.shipping.address2}` : ""}<br/>
+                {order.shipping.city}{order.shipping.state ? `, ${order.shipping.state}` : ""} {order.shipping.zip}<br/>
+                {order.shipping.country}
+              </div>
+            </div>
+            <div className="sticker rounded-xl bg-white p-3">
+              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Shipment</div>
+              <div className="text-sm capitalize"><b>Status:</b> {order.status.replace(/_/g, " ")}</div>
+              {order.carrier && <div className="text-sm"><b>Carrier:</b> {order.carrier}</div>}
+              {order.trackingNumber && <div className="text-sm font-mono"><b>Tracking:</b> {order.trackingNumber}</div>}
+              {order.shipping.deliveryMethod && <div className="text-sm"><b>Method:</b> {order.shipping.deliveryMethod}</div>}
+            </div>
+          </div>
+
+          <div className="sticker rounded-xl bg-white p-3">
+            <div className="text-xs font-bold uppercase text-muted-foreground mb-2">Items</div>
+            <ul className="divide-y divide-ink/10">
+              {order.items.map((it, i) => {
+                const p = products.find((x) => x.id === it.productId);
+                const price = p?.price ?? 0;
+                return (
+                  <li key={i} className="flex items-center gap-3 py-2">
+                    {p && <img src={p.image} className="h-10 w-10 rounded border-2 border-ink object-cover" alt=""/>}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm truncate">{p?.name ?? it.productId}</div>
+                      <div className="text-xs text-muted-foreground">{it.size} · {it.color} · qty {it.qty}</div>
+                    </div>
+                    <div className="text-sm font-bold">{formatPrice(price * it.qty)}</div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-3 pt-3 border-t-2 border-ink/10 space-y-1 text-sm">
+              <div className="flex justify-between"><span>Subtotal</span><span>{formatPrice(order.subtotal ?? order.total)}</span></div>
+              {(order.discount ?? 0) > 0 && (
+                <div className="flex justify-between text-pop-pink">
+                  <span>Discount{order.couponCode ? ` (${order.couponCode})` : ""}</span>
+                  <span>−{formatPrice(order.discount ?? 0)}</span>
+                </div>
+              )}
+              <div className="flex justify-between"><span>Shipping</span><span>{(order.shippingFee ?? 0) > 0 ? formatPrice(order.shippingFee ?? 0) : "FREE"}</span></div>
+              <div className="flex justify-between font-display text-xl pt-1 border-t border-ink/10"><span>Total</span><span>{formatPrice(order.total)}</span></div>
+            </div>
+          </div>
+
+          {order.tracking && order.tracking.length > 0 && (
+            <div className="sticker rounded-xl bg-white p-3">
+              <div className="text-xs font-bold uppercase text-muted-foreground mb-2">Timeline</div>
+              <ol className="space-y-2">
+                {order.tracking.slice().reverse().map((t, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <div className="h-2 w-2 rounded-full bg-pop-pink mt-1.5 shrink-0"/>
+                    <div className="flex-1">
+                      <div className="text-sm font-bold capitalize">{t.status.replace(/_/g, " ")}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(t.at).toLocaleString()}</div>
+                      {t.note && <div className="text-xs mt-0.5">{t.note}</div>}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => { downloadInvoice(order, products); toast.success("Invoice downloaded"); }}
+              className="btn-pop bg-pop-yellow"><Download size={14}/> Download invoice</button>
+            <button onClick={onClose} className="btn-pop bg-white">Close</button>
+          </div>
+        </div>
       </div>
     </div>
   );
