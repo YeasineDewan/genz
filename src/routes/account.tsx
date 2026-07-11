@@ -214,6 +214,77 @@ function Overview({ onTab }: { onTab: (t: Tab) => void }) {
   );
 }
 
+function Recommendations() {
+  const user = useUser();
+  const orders = useOrders(user?.id ?? "");
+  const products = useProducts();
+  const wishlist = useWishlist();
+  const recentIds = useRecent();
+
+  const { items, reason } = useMemo(() => {
+    const purchasedIds = new Set<string>();
+    const catScore = new Map<string, number>();
+    const bump = (cat: string, w: number) => catScore.set(cat, (catScore.get(cat) ?? 0) + w);
+
+    for (const o of orders) {
+      for (const it of o.items) {
+        purchasedIds.add(it.productId);
+        const p = products.find((x) => x.id === it.productId);
+        if (p) bump(p.category, 3 * it.qty);
+      }
+    }
+    for (const id of recentIds) {
+      const p = products.find((x) => x.id === id);
+      if (p) bump(p.category, 2);
+    }
+    for (const id of wishlist) {
+      const p = products.find((x) => x.id === id);
+      if (p) bump(p.category, 1);
+    }
+
+    const exclude = new Set<string>([...purchasedIds, ...wishlist, ...recentIds]);
+    const hasHistory = catScore.size > 0;
+
+    const scored = products
+      .filter((p) => p.stock > 0 && !exclude.has(p.id))
+      .map((p) => ({ p, s: catScore.get(p.category) ?? 0 }))
+      .sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name));
+
+    const picks = scored.slice(0, 4).map((x) => x.p);
+    // Fallback: if nothing after exclusions, show popular products
+    const items: Product[] = picks.length > 0
+      ? picks
+      : products.filter((p) => p.stock > 0).slice(0, 4);
+
+    const topCat = [...catScore.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const reason = hasHistory
+      ? topCat ? `Because you love ${topCat}` : "Picked for you"
+      : "Trending right now";
+
+    return { items, reason };
+  }, [orders, products, wishlist, recentIds]);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="sticker rounded-2xl bg-white p-4">
+      <div className="flex items-end justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-widest opacity-70 flex items-center gap-1">
+            <Sparkles size={12}/> Recommended for you
+          </div>
+          <div className="font-display text-2xl">{reason}</div>
+        </div>
+        <Link to="/shop" className="chip">Browse more</Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {items.map((p, i) => <ProductCard key={p.id} product={p} index={i}/>)}
+      </div>
+    </div>
+  );
+}
+
+
 function StatCard({ Icon, label, value, accent, onClick }: any) {
   return (
     <button onClick={onClick} className={`sticker rounded-2xl p-4 text-left transition hover:translate-y-[-2px] ${accent}`}>
