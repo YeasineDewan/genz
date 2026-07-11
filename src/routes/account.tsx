@@ -4,13 +4,14 @@ import { Layout } from "@/components/Layout";
 import {
   useUser, useOrders, useProducts, useWishlist, useNotifications,
   useUnreadNotificationCount, useAddresses, usePreferences, useLoyalty,
-  useReviews, useAppliedCoupon, useCoupons,
+  useReviews, useAppliedCoupon, useCoupons, useRecent,
   formatPrice, signOut, updateProfile, changePassword,
   saveAddress, deleteAddress, setDefaultAddress,
   updatePreferences, markNotificationRead, markAllNotificationsRead, clearNotifications,
   cancelOrder, LOYALTY_TIERS,
 } from "@/lib/store";
-import type { Address, Notification, Order } from "@/lib/types";
+import type { Address, Notification, Order, Product } from "@/lib/types";
+import { ProductCard } from "@/components/ProductCard";
 import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, MapPin, Heart, Star, Bell, Settings, Shield,
