@@ -221,50 +221,61 @@ function Recommendations() {
   const wishlist = useWishlist();
   const recentIds = useRecent();
 
-  const { items, reason } = useMemo(() => {
-    const purchasedIds = new Set<string>();
-    const catScore = new Map<string, number>();
-    const bump = (cat: string, w: number) => catScore.set(cat, (catScore.get(cat) ?? 0) + w);
-
+  const signals = useMemo(() => {
+    const purchasedIds: string[] = [];
+    const purchaseQty: Record<string, number> = {};
     for (const o of orders) {
       for (const it of o.items) {
-        purchasedIds.add(it.productId);
-        const p = products.find((x) => x.id === it.productId);
-        if (p) bump(p.category, 3 * it.qty);
+        if (!purchaseQty[it.productId]) purchasedIds.push(it.productId);
+        purchaseQty[it.productId] = (purchaseQty[it.productId] ?? 0) + it.qty;
       }
     }
-    for (const id of recentIds) {
-      const p = products.find((x) => x.id === id);
-      if (p) bump(p.category, 2);
-    }
-    for (const id of wishlist) {
-      const p = products.find((x) => x.id === id);
-      if (p) bump(p.category, 1);
-    }
-
-    const exclude = new Set<string>([...purchasedIds, ...wishlist, ...recentIds]);
-    const hasHistory = catScore.size > 0;
-
-    const scored = products
-      .filter((p) => p.stock > 0 && !exclude.has(p.id))
-      .map((p) => ({ p, s: catScore.get(p.category) ?? 0 }))
-      .sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name));
-
-    const picks = scored.slice(0, 4).map((x) => x.p);
-    // Fallback: if nothing after exclusions, show popular products
-    const items: Product[] = picks.length > 0
-      ? picks
-      : products.filter((p) => p.stock > 0).slice(0, 4);
-
-    const topCat = [...catScore.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const reason = hasHistory
-      ? topCat ? `Because you love ${topCat}` : "Picked for you"
-      : "Trending right now";
-
-    return { items, reason };
+    return {
+      products,
+      purchasedIds,
+      recentIds: [...recentIds],
+      wishlistIds: [...wishlist],
+      purchaseQty,
+      limit: 4,
+    };
   }, [orders, products, wishlist, recentIds]);
 
-  if (items.length === 0) return null;
+  const [state, setState] = useState<{ items: Product[]; reason: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // client-side cache key (mirrors server hash inputs)
+    const key = `genz.reco.${user?.id ?? "guest"}.${signals.products.length}.${signals.purchasedIds.length}.${signals.recentIds.join(",")}.${signals.wishlistIds.length}`;
+    const CLIENT_TTL = 5 * 60 * 1000;
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { at: number; items: Product[]; reason: string };
+        if (Date.now() - parsed.at < CLIENT_TTL) {
+          setState({ items: parsed.items, reason: parsed.reason });
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    (async () => {
+      try {
+        const { getRecommendations } = await import("@/lib/recommendations.functions");
+        const res = await getRecommendations({ data: signals });
+        if (cancelled) return;
+        setState({ items: res.items, reason: res.reason });
+        try {
+          sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), items: res.items, reason: res.reason }));
+        } catch { /* ignore quota */ }
+      } catch {
+        if (!cancelled) setState({ items: [], reason: "" });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [signals, user?.id]);
+
+  if (!state || state.items.length === 0) return null;
 
   return (
     <div className="sticker rounded-2xl bg-white p-4">
@@ -273,16 +284,17 @@ function Recommendations() {
           <div className="text-xs font-bold uppercase tracking-widest opacity-70 flex items-center gap-1">
             <Sparkles size={12}/> Recommended for you
           </div>
-          <div className="font-display text-2xl">{reason}</div>
+          <div className="font-display text-2xl">{state.reason}</div>
         </div>
         <Link to="/shop" className="chip">Browse more</Link>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {items.map((p, i) => <ProductCard key={p.id} product={p} index={i}/>)}
+        {state.items.map((p, i) => <ProductCard key={p.id} product={p} index={i}/>)}
       </div>
     </div>
   );
 }
+
 
 
 function StatCard({ Icon, label, value, accent, onClick }: any) {
