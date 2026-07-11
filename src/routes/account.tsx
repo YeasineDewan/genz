@@ -208,6 +208,8 @@ function Overview({ onTab }: { onTab: (t: Tab) => void }) {
 
         <LoyaltyMini onTab={onTab}/>
       </div>
+
+      <Recommendations />
     </div>
   );
 }
