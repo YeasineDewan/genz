@@ -26,7 +26,7 @@ import {
   TrendingUp, ShoppingBag, Users, DollarSign, AlertTriangle, ArrowUp, ArrowDown,
   ImagePlus, GripVertical, History, Save, Edit3, Ticket, MessageSquare, Eye, EyeOff, Flag, Check,
   LogOut, Clock, ShieldCheck, Menu, ShieldAlert, Mail, Send, RefreshCcw, Filter,
-  Search, Download, FileText,
+  Search, Download, FileText, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadInvoice } from "@/lib/invoice";
