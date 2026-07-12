@@ -332,9 +332,16 @@ function Recommendations() {
     return () => { cancelled = true; };
   }, [impressionKey, status, user?.id]);
 
-  const onCardClick = (product: Product, position: number) => {
-    import("@/lib/reco-analytics").then(({ trackRecoClick }) => {
-      trackRecoClick({
+  const [quickView, setQuickView] = useState<Product | null>(null);
+
+  const fireAction = (
+    type: "click" | "view_details" | "quick_view" | "add_to_cart",
+    product: Product,
+    position: number,
+  ) => {
+    import("@/lib/reco-analytics").then(({ trackRecoAction }) => {
+      trackRecoAction({
+        type,
         productId: product.id,
         reason: state?.reason ?? "",
         position,
