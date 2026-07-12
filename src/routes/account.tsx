@@ -12,6 +12,8 @@ import {
 } from "@/lib/store";
 import type { Address, Notification, Order, Product } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
+import { recoConfig } from "@/lib/reco-config";
 import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, MapPin, Heart, Star, Bell, Settings, Shield,
