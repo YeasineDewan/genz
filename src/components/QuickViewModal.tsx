@@ -8,7 +8,7 @@ import { Stars } from "./Stars";
 import { WishlistButton } from "./WishlistButton";
 import { toast } from "sonner";
 
-export function QuickViewModal({ product, onClose }: { product: Product | null; onClose: () => void }) {
+export function QuickViewModal({ product, onClose, onAdd }: { product: Product | null; onClose: () => void; onAdd?: (product: Product) => void }) {
   const [size, setSize] = useState<string>("");
   const [color, setColor] = useState<string>("");
   const rating = useProductRating(product?.id ?? "");
