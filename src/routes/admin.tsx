@@ -38,7 +38,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews" | "security";
+type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews" | "recommendations" | "security";
 
 const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }>; hint: string }[] = [
   { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, hint: "Overview & KPIs" },
@@ -48,6 +48,7 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "inventory", label: "Inventory", Icon: Boxes, hint: "Stock audit" },
   { key: "coupons", label: "Coupons", Icon: Ticket, hint: "Promotions" },
   { key: "reviews", label: "Reviews", Icon: MessageSquare, hint: "Moderation" },
+  { key: "recommendations", label: "Recommendations", Icon: Sparkles, hint: "Impressions & clicks" },
   { key: "security", label: "Security", Icon: ShieldAlert, hint: "Audit log & email" },
 ];
 
