@@ -262,7 +262,7 @@ function Recommendations() {
     let cancelled = false;
     const signals = { ...baseSignals, limit: RECO_PAGE_SIZE, offset };
     const key = `genz.reco.${user?.id ?? "guest"}.${signals.products.length}.${signals.purchasedIds.length}.${signals.recentIds.join(",")}.${signals.wishlistIds.length}.o${offset}`;
-    const CLIENT_TTL = 5 * 60 * 1000;
+    const CLIENT_TTL = recoConfig.clientCacheTtlMs;
 
     const applyCache = (): boolean => {
       try {
