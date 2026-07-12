@@ -9,6 +9,7 @@ export interface RecommendationSignals {
   // productId -> qty purchased (used to weight category interest)
   purchaseQty?: Record<string, number>;
   limit?: number;
+  offset?: number;
 }
 
 export interface RecommendationResult {
@@ -16,6 +17,10 @@ export interface RecommendationResult {
   reason: string;
   cached: boolean;
   computedAt: number;
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
 }
 
 // In-memory LRU cache on the server. Keyed by a stable hash of the inputs.
@@ -31,7 +36,8 @@ function hashKey(input: RecommendationSignals): string {
     [...input.recentIds].join(","),
     [...input.wishlistIds].sort().join(","),
     Object.entries(input.purchaseQty ?? {}).sort().map(([k, v]) => `${k}=${v}`).join(","),
-    String(input.limit ?? 4),
+    `l=${input.limit ?? 4}`,
+    `o=${input.offset ?? 0}`,
   ];
   // simple djb2
   let h = 5381;
@@ -41,7 +47,7 @@ function hashKey(input: RecommendationSignals): string {
 }
 
 function compute(input: RecommendationSignals): Omit<RecommendationResult, "cached"> {
-  const { products, purchasedIds, recentIds, wishlistIds, purchaseQty = {}, limit = 4 } = input;
+  const { products, purchasedIds, recentIds, wishlistIds, purchaseQty = {}, limit = 4, offset = 0 } = input;
   const catScore = new Map<string, number>();
   const bump = (cat: string, w: number) => catScore.set(cat, (catScore.get(cat) ?? 0) + w);
 
@@ -68,9 +74,9 @@ function compute(input: RecommendationSignals): Omit<RecommendationResult, "cach
     .map((p) => ({ p, s: catScore.get(p.category) ?? 0 }))
     .sort((a, b) => b.s - a.s || a.p.name.localeCompare(b.p.name));
 
-  const picks = scored.slice(0, limit).map((x) => x.p);
-  const items =
-    picks.length > 0 ? picks : products.filter((p) => p.stock > 0).slice(0, limit);
+  const pool = scored.length > 0 ? scored.map((x) => x.p) : products.filter((p) => p.stock > 0);
+  const total = pool.length;
+  const items = pool.slice(offset, offset + limit);
 
   const topCat = [...catScore.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   const reason = hasHistory
@@ -79,7 +85,15 @@ function compute(input: RecommendationSignals): Omit<RecommendationResult, "cach
       : "Picked for you"
     : "Trending right now";
 
-  return { items, reason, computedAt: Date.now() };
+  return {
+    items,
+    reason,
+    computedAt: Date.now(),
+    total,
+    offset,
+    limit,
+    hasMore: offset + items.length < total,
+  };
 }
 
 export const getRecommendations = createServerFn({ method: "POST" })
@@ -93,7 +107,8 @@ export const getRecommendations = createServerFn({ method: "POST" })
       recentIds: (data.recentIds ?? []).slice(0, 50),
       wishlistIds: (data.wishlistIds ?? []).slice(0, 500),
       purchaseQty: data.purchaseQty ?? {},
-      limit: Math.min(Math.max(data.limit ?? 4, 1), 20),
+      limit: Math.min(Math.max(data.limit ?? 4, 1), 24),
+      offset: Math.min(Math.max(data.offset ?? 0, 0), 500),
     } satisfies RecommendationSignals;
   })
   .handler(async ({ data }): Promise<RecommendationResult> => {
