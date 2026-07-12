@@ -216,7 +216,7 @@ function Overview({ onTab }: { onTab: (t: Tab) => void }) {
   );
 }
 
-const RECO_PAGE_SIZE = 4;
+const RECO_PAGE_SIZE = recoConfig.pageSize;
 
 function Recommendations() {
   const user = useUser();
