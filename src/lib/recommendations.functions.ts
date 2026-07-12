@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { Product } from "./types";
+import { recoConfig } from "./reco-config";
 
 export interface RecommendationSignals {
   products: Product[];
@@ -25,8 +26,7 @@ export interface RecommendationResult {
 
 // In-memory LRU cache on the server. Keyed by a stable hash of the inputs.
 // Cache lives for the lifetime of the worker instance; each entry has a TTL.
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const CACHE_MAX = 200;
+// TTL & max size come from `reco-config.ts` (env-tunable).
 const cache = new Map<string, { at: number; value: Omit<RecommendationResult, "cached"> }>();
 
 function hashKey(input: RecommendationSignals): string {
@@ -107,15 +107,15 @@ export const getRecommendations = createServerFn({ method: "POST" })
       recentIds: (data.recentIds ?? []).slice(0, 50),
       wishlistIds: (data.wishlistIds ?? []).slice(0, 500),
       purchaseQty: data.purchaseQty ?? {},
-      limit: Math.min(Math.max(data.limit ?? 4, 1), 24),
-      offset: Math.min(Math.max(data.offset ?? 0, 0), 500),
+      limit: Math.min(Math.max(data.limit ?? recoConfig.defaultLimit, 1), recoConfig.maxLimit),
+      offset: Math.min(Math.max(data.offset ?? 0, 0), recoConfig.maxOffset),
     } satisfies RecommendationSignals;
   })
   .handler(async ({ data }): Promise<RecommendationResult> => {
     const key = hashKey(data);
     const now = Date.now();
     const hit = cache.get(key);
-    if (hit && now - hit.at < CACHE_TTL_MS) {
+    if (hit && now - hit.at < recoConfig.cacheTtlMs) {
       // LRU touch
       cache.delete(key);
       cache.set(key, hit);
@@ -123,7 +123,7 @@ export const getRecommendations = createServerFn({ method: "POST" })
     }
     const value = compute(data);
     cache.set(key, { at: now, value });
-    if (cache.size > CACHE_MAX) {
+    if (cache.size > recoConfig.cacheMax) {
       const oldest = cache.keys().next().value;
       if (oldest) cache.delete(oldest);
     }

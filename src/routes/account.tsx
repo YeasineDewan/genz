@@ -12,6 +12,8 @@ import {
 } from "@/lib/store";
 import type { Address, Notification, Order, Product } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
+import { QuickViewModal } from "@/components/QuickViewModal";
+import { recoConfig } from "@/lib/reco-config";
 import { useEffect, useMemo, useState } from "react";
 import {
   LayoutDashboard, Package, MapPin, Heart, Star, Bell, Settings, Shield,
@@ -214,7 +216,7 @@ function Overview({ onTab }: { onTab: (t: Tab) => void }) {
   );
 }
 
-const RECO_PAGE_SIZE = 4;
+const RECO_PAGE_SIZE = recoConfig.pageSize;
 
 function Recommendations() {
   const user = useUser();
@@ -260,7 +262,7 @@ function Recommendations() {
     let cancelled = false;
     const signals = { ...baseSignals, limit: RECO_PAGE_SIZE, offset };
     const key = `genz.reco.${user?.id ?? "guest"}.${signals.products.length}.${signals.purchasedIds.length}.${signals.recentIds.join(",")}.${signals.wishlistIds.length}.o${offset}`;
-    const CLIENT_TTL = 5 * 60 * 1000;
+    const CLIENT_TTL = recoConfig.clientCacheTtlMs;
 
     const applyCache = (): boolean => {
       try {
@@ -330,9 +332,16 @@ function Recommendations() {
     return () => { cancelled = true; };
   }, [impressionKey, status, user?.id]);
 
-  const onCardClick = (product: Product, position: number) => {
-    import("@/lib/reco-analytics").then(({ trackRecoClick }) => {
-      trackRecoClick({
+  const [quickView, setQuickView] = useState<Product | null>(null);
+
+  const fireAction = (
+    type: "click" | "view_details" | "quick_view" | "add_to_cart",
+    product: Product,
+    position: number,
+  ) => {
+    import("@/lib/reco-analytics").then(({ trackRecoAction }) => {
+      trackRecoAction({
+        type,
         productId: product.id,
         reason: state?.reason ?? "",
         position,
@@ -404,13 +413,31 @@ function Recommendations() {
         {state.items.map((p, i) => (
           <div
             key={p.id}
-            onClickCapture={() => onCardClick(p, i)}
-            onAuxClick={() => onCardClick(p, i)}
+            onClickCapture={(e) => {
+              // Distinguish link clicks (view_details) from generic clicks
+              const target = e.target as HTMLElement | null;
+              const isLink = !!target?.closest("a");
+              fireAction("click", p, i);
+              if (isLink) fireAction("view_details", p, i);
+            }}
+            onAuxClick={() => fireAction("click", p, i)}
           >
-            <ProductCard product={p} index={i}/>
+            <ProductCard
+              product={p}
+              index={i}
+              onQuickView={(prod) => { fireAction("quick_view", prod, i); setQuickView(prod); }}
+            />
           </div>
         ))}
       </div>
+      <QuickViewModal
+        product={quickView}
+        onClose={() => setQuickView(null)}
+        onAdd={(prod) => {
+          const pos = state.items.findIndex((x) => x.id === prod.id);
+          fireAction("add_to_cart", prod, pos < 0 ? 0 : pos);
+        }}
+      />
       {state.hasMore && (
         <div className="mt-4 flex justify-center">
           <button
