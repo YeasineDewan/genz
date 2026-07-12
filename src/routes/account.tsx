@@ -413,13 +413,31 @@ function Recommendations() {
         {state.items.map((p, i) => (
           <div
             key={p.id}
-            onClickCapture={() => onCardClick(p, i)}
-            onAuxClick={() => onCardClick(p, i)}
+            onClickCapture={(e) => {
+              // Distinguish link clicks (view_details) from generic clicks
+              const target = e.target as HTMLElement | null;
+              const isLink = !!target?.closest("a");
+              fireAction("click", p, i);
+              if (isLink) fireAction("view_details", p, i);
+            }}
+            onAuxClick={() => fireAction("click", p, i)}
           >
-            <ProductCard product={p} index={i}/>
+            <ProductCard
+              product={p}
+              index={i}
+              onQuickView={(prod) => { fireAction("quick_view", prod, i); setQuickView(prod); }}
+            />
           </div>
         ))}
       </div>
+      <QuickViewModal
+        product={quickView}
+        onClose={() => setQuickView(null)}
+        onAdd={(prod) => {
+          const pos = state.items.findIndex((x) => x.id === prod.id);
+          fireAction("add_to_cart", prod, pos < 0 ? 0 : pos);
+        }}
+      />
       {state.hasMore && (
         <div className="mt-4 flex justify-center">
           <button
