@@ -214,6 +214,8 @@ function Overview({ onTab }: { onTab: (t: Tab) => void }) {
   );
 }
 
+const RECO_PAGE_SIZE = 4;
+
 function Recommendations() {
   const user = useUser();
   const orders = useOrders(user?.id ?? "");
@@ -221,7 +223,7 @@ function Recommendations() {
   const wishlist = useWishlist();
   const recentIds = useRecent();
 
-  const signals = useMemo(() => {
+  const baseSignals = useMemo(() => {
     const purchasedIds: string[] = [];
     const purchaseQty: Record<string, number> = {};
     for (const o of orders) {
@@ -236,44 +238,154 @@ function Recommendations() {
       recentIds: [...recentIds],
       wishlistIds: [...wishlist],
       purchaseQty,
-      limit: 4,
     };
   }, [orders, products, wishlist, recentIds]);
 
-  const [state, setState] = useState<{ items: Product[]; reason: string } | null>(null);
+  type PageState = {
+    items: Product[];
+    reason: string;
+    hasMore: boolean;
+    total: number;
+  };
+  const [state, setState] = useState<PageState | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "ready">("loading");
+  const [offset, setOffset] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  // reset pagination when signals change (e.g. new purchase, new wishlist item)
+  useEffect(() => { setOffset(0); setState(null); setStatus("loading"); }, [baseSignals]);
 
   useEffect(() => {
     let cancelled = false;
-    // client-side cache key (mirrors server hash inputs)
-    const key = `genz.reco.${user?.id ?? "guest"}.${signals.products.length}.${signals.purchasedIds.length}.${signals.recentIds.join(",")}.${signals.wishlistIds.length}`;
+    const signals = { ...baseSignals, limit: RECO_PAGE_SIZE, offset };
+    const key = `genz.reco.${user?.id ?? "guest"}.${signals.products.length}.${signals.purchasedIds.length}.${signals.recentIds.join(",")}.${signals.wishlistIds.length}.o${offset}`;
     const CLIENT_TTL = 5 * 60 * 1000;
-    try {
-      const raw = sessionStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw) as { at: number; items: Product[]; reason: string };
-        if (Date.now() - parsed.at < CLIENT_TTL) {
-          setState({ items: parsed.items, reason: parsed.reason });
-          return;
-        }
-      }
-    } catch { /* ignore */ }
+
+    const applyCache = (): boolean => {
+      try {
+        const raw = sessionStorage.getItem(key);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw) as { at: number; page: PageState };
+        if (Date.now() - parsed.at >= CLIENT_TTL) return false;
+        setState((prev) => (offset === 0 || !prev)
+          ? parsed.page
+          : { ...parsed.page, items: [...prev.items, ...parsed.page.items] });
+        setStatus("ready");
+        return true;
+      } catch { return false; }
+    };
+
+    if (offset === 0) {
+      if (applyCache()) return;
+      setStatus("loading");
+    } else {
+      if (applyCache()) { setLoadingMore(false); return; }
+      setLoadingMore(true);
+    }
 
     (async () => {
       try {
         const { getRecommendations } = await import("@/lib/recommendations.functions");
         const res = await getRecommendations({ data: signals });
         if (cancelled) return;
-        setState({ items: res.items, reason: res.reason });
-        try {
-          sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), items: res.items, reason: res.reason }));
-        } catch { /* ignore quota */ }
+        const page: PageState = {
+          items: res.items,
+          reason: res.reason,
+          hasMore: res.hasMore,
+          total: res.total,
+        };
+        setState((prev) => (offset === 0 || !prev)
+          ? page
+          : { ...page, items: [...prev.items, ...page.items] });
+        setStatus("ready");
+        try { sessionStorage.setItem(key, JSON.stringify({ at: Date.now(), page })); } catch { /* quota */ }
       } catch {
-        if (!cancelled) setState({ items: [], reason: "" });
+        if (cancelled) return;
+        setStatus("error");
+      } finally {
+        if (!cancelled) setLoadingMore(false);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [signals, user?.id]);
+    // attempt is included so retry re-runs even with identical signals+offset
+  }, [baseSignals, offset, user?.id, attempt]);
+
+  // fire an impression event whenever a new page of items renders
+  const impressionKey = state ? `${state.reason}|${state.items.map((p) => p.id).join(",")}` : "";
+  useEffect(() => {
+    if (status !== "ready" || !state || state.items.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { trackRecoImpression } = await import("@/lib/reco-analytics");
+      if (cancelled) return;
+      trackRecoImpression({
+        productIds: state.items.map((p) => p.id),
+        reason: state.reason,
+        offset: 0,
+        userId: user?.id,
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [impressionKey, status, user?.id]);
+
+  const onCardClick = (product: Product, position: number) => {
+    import("@/lib/reco-analytics").then(({ trackRecoClick }) => {
+      trackRecoClick({
+        productId: product.id,
+        reason: state?.reason ?? "",
+        position,
+        offset: 0,
+        userId: user?.id,
+      });
+    }).catch(() => { /* analytics is best-effort */ });
+  };
+
+  // ---- render states ----
+  if (status === "loading" && !state) {
+    return (
+      <div className="sticker rounded-2xl bg-white p-4" aria-busy="true" aria-live="polite">
+        <div className="flex items-end justify-between mb-4">
+          <div className="space-y-2">
+            <div className="h-3 w-40 bg-muted rounded animate-pulse" />
+            <div className="h-7 w-56 bg-muted rounded animate-pulse" />
+          </div>
+          <div className="h-8 w-24 bg-muted rounded-full animate-pulse" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: RECO_PAGE_SIZE }).map((_, i) => (
+            <div key={i} className="sticker rounded-2xl overflow-hidden bg-white">
+              <div className="aspect-square bg-muted animate-pulse" />
+              <div className="p-4 border-t-[3px] border-ink space-y-2">
+                <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+                <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <span className="sr-only">Loading recommendations…</span>
+      </div>
+    );
+  }
+
+  if (status === "error" && !state) {
+    return (
+      <div className="sticker rounded-2xl bg-white p-6 text-center" role="alert">
+        <AlertCircle size={28} className="mx-auto mb-2 text-destructive" />
+        <div className="font-bold">Couldn't load recommendations</div>
+        <div className="text-sm text-muted-foreground mt-1">
+          Something went wrong fetching picks for you.
+        </div>
+        <button
+          onClick={() => { setStatus("loading"); setAttempt((n) => n + 1); }}
+          className="btn-pop mt-4 mx-auto"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   if (!state || state.items.length === 0) return null;
 
@@ -289,8 +401,33 @@ function Recommendations() {
         <Link to="/shop" className="chip">Browse more</Link>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {state.items.map((p, i) => <ProductCard key={p.id} product={p} index={i}/>)}
+        {state.items.map((p, i) => (
+          <div
+            key={p.id}
+            onClickCapture={() => onCardClick(p, i)}
+            onAuxClick={() => onCardClick(p, i)}
+          >
+            <ProductCard product={p} index={i}/>
+          </div>
+        ))}
       </div>
+      {state.hasMore && (
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={() => setOffset((o) => o + RECO_PAGE_SIZE)}
+            disabled={loadingMore}
+            className="chip disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Show more"}
+          </button>
+        </div>
+      )}
+      {status === "error" && state && (
+        <div className="mt-3 text-xs text-destructive text-center">
+          Couldn't load more picks.{" "}
+          <button className="underline" onClick={() => setAttempt((n) => n + 1)}>Retry</button>
+        </div>
+      )}
     </div>
   );
 }
