@@ -142,6 +142,7 @@ function Admin() {
             {tab === "inventory" && <Inventory/>}
             {tab === "coupons" && <Coupons/>}
             {tab === "reviews" && <ReviewsModeration/>}
+            {tab === "recommendations" && <RecommendationsAdmin/>}
             {tab === "security" && <Security/>}
           </main>
         </div>
