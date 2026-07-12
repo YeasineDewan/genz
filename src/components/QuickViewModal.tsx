@@ -65,6 +65,7 @@ export function QuickViewModal({ product, onClose, onAdd }: { product: Product |
                     const s = size || product.sizes[0];
                     const c = color || product.colors[0];
                     addToCart({ productId: product.id, size: s, color: c, qty: 1 });
+                    onAdd?.(product);
                     toast.success(`${product.name} added`, { description: `${s} · ${c}` });
                     onClose();
                   }}
