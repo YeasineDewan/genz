@@ -2194,3 +2194,169 @@ function EmailSettings() {
     </form>
   );
 }
+
+/* ---------- Recommendations analytics ---------- */
+function RecommendationsAdmin() {
+  const [events, setEvents] = useState(() => {
+    if (typeof window === "undefined") return [] as import("@/lib/reco-analytics").RecoEvent[];
+    try {
+      const raw = localStorage.getItem("genz.reco.events");
+      return raw ? (JSON.parse(raw) as import("@/lib/reco-analytics").RecoEvent[]) : [];
+    } catch { return []; }
+  });
+  const [range, setRange] = useState<"24h" | "7d" | "30d" | "all">("7d");
+  const [segment, setSegment] = useState<"all" | "signed_in" | "anonymous">("all");
+  const products = useProducts();
+
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const raw = localStorage.getItem("genz.reco.events");
+        setEvents(raw ? JSON.parse(raw) : []);
+      } catch { /* ignore */ }
+    };
+    window.addEventListener("genz:reco", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("genz:reco", handler);
+      window.removeEventListener("storage", handler);
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const now = Date.now();
+    const cutoff =
+      range === "24h" ? now - 24 * 3600_000 :
+      range === "7d"  ? now - 7 * 24 * 3600_000 :
+      range === "30d" ? now - 30 * 24 * 3600_000 : 0;
+    return events.filter((e) => {
+      if (e.at < cutoff) return false;
+      if (segment === "signed_in" && !e.userId) return false;
+      if (segment === "anonymous" && e.userId) return false;
+      return true;
+    });
+  }, [events, range, segment]);
+
+  const totals = useMemo(() => {
+    const t = { impression: 0, click: 0, view_details: 0, quick_view: 0, add_to_cart: 0, wishlist: 0 };
+    for (const e of filtered) {
+      if (e.type === "impression") t.impression += e.productIds?.length ?? 0;
+      else t[e.type as keyof typeof t] = (t[e.type as keyof typeof t] ?? 0) + 1;
+    }
+    return t;
+  }, [filtered]);
+
+  const ctr = totals.impression > 0 ? (totals.click / totals.impression) * 100 : 0;
+  const addRate = totals.impression > 0 ? (totals.add_to_cart / totals.impression) * 100 : 0;
+
+  const byProduct = useMemo(() => {
+    const map = new Map<string, { impressions: number; clicks: number; adds: number; quickViews: number }>();
+    const get = (id: string) => {
+      let v = map.get(id);
+      if (!v) { v = { impressions: 0, clicks: 0, adds: 0, quickViews: 0 }; map.set(id, v); }
+      return v;
+    };
+    for (const e of filtered) {
+      if (e.type === "impression") for (const id of e.productIds ?? []) get(id).impressions++;
+      else if (e.productId) {
+        const v = get(e.productId);
+        if (e.type === "click" || e.type === "view_details") v.clicks++;
+        if (e.type === "add_to_cart") v.adds++;
+        if (e.type === "quick_view") v.quickViews++;
+      }
+    }
+    return [...map.entries()]
+      .map(([id, v]) => ({ id, ...v, ctr: v.impressions ? (v.clicks / v.impressions) * 100 : 0 }))
+      .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
+      .slice(0, 15);
+  }, [filtered]);
+
+  const sessions = new Set(filtered.map((e) => e.session)).size;
+  const signedInCount = new Set(filtered.filter((e) => e.userId).map((e) => e.userId!)).size;
+
+  const clearAll = () => {
+    if (!confirm("Clear all recommendation analytics events?")) return;
+    try { localStorage.removeItem("genz.reco.events"); } catch { /* ignore */ }
+    setEvents([]);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="sticker rounded-2xl bg-white p-4 flex flex-wrap items-center gap-3">
+        <div className="text-xs font-bold uppercase tracking-widest opacity-70">Filters</div>
+        <div className="flex gap-1">
+          {(["24h", "7d", "30d", "all"] as const).map((r) => (
+            <button key={r} onClick={() => setRange(r)}
+              className={`chip ${range === r ? "bg-ink text-paper" : ""}`}>{r}</button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {(["all", "signed_in", "anonymous"] as const).map((s) => (
+            <button key={s} onClick={() => setSegment(s)}
+              className={`chip ${segment === s ? "bg-pop-pink text-white" : ""}`}>{s.replace("_", " ")}</button>
+          ))}
+        </div>
+        <button onClick={clearAll} className="ml-auto chip bg-destructive text-white">Clear events</button>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard label="Impressions" value={totals.impression.toLocaleString()} accent="bg-pop-cyan" />
+        <MetricCard label="Clicks" value={totals.click.toLocaleString()} accent="bg-pop-yellow" />
+        <MetricCard label="Add to cart" value={totals.add_to_cart.toLocaleString()} accent="bg-pop-orange" />
+        <MetricCard label="CTR" value={`${ctr.toFixed(2)}%`} accent="bg-pop-pink text-white" />
+        <MetricCard label="View details" value={totals.view_details.toLocaleString()} accent="bg-white" />
+        <MetricCard label="Quick views" value={totals.quick_view.toLocaleString()} accent="bg-white" />
+        <MetricCard label="Add rate" value={`${addRate.toFixed(2)}%`} accent="bg-white" />
+        <MetricCard label="Sessions" value={`${sessions} (${signedInCount} users)`} accent="bg-white" />
+      </div>
+
+      <div className="sticker rounded-2xl bg-white overflow-hidden">
+        <div className="p-4 border-b-2 border-ink font-display text-2xl">Top products</div>
+        {byProduct.length === 0 ? (
+          <div className="p-6 text-center text-muted-foreground text-sm">No events in this range.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-pop-yellow">
+              <tr className="text-left">
+                <th className="p-3">Product</th>
+                <th className="p-3">Impressions</th>
+                <th className="p-3">Clicks</th>
+                <th className="p-3">CTR</th>
+                <th className="p-3">Quick views</th>
+                <th className="p-3">Add to cart</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byProduct.map((row) => {
+                const p = products.find((x) => x.id === row.id);
+                return (
+                  <tr key={row.id} className="border-t border-ink/10">
+                    <td className="p-3">{p?.name ?? row.id}</td>
+                    <td className="p-3">{row.impressions}</td>
+                    <td className="p-3">{row.clicks}</td>
+                    <td className="p-3">{row.ctr.toFixed(1)}%</td>
+                    <td className="p-3">{row.quickViews}</td>
+                    <td className="p-3">{row.adds}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Analytics are captured client-side (localStorage) per browser. Numbers reflect events from this device only.
+      </p>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <div className={`sticker rounded-2xl p-4 ${accent}`}>
+      <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">{label}</div>
+      <div className="font-display text-2xl mt-1">{value}</div>
+    </div>
+  );
+}
