@@ -2274,6 +2274,56 @@ function RecommendationsAdmin() {
   const sessions = new Set(filtered.map((e) => e.session)).size;
   const signedInCount = new Set(filtered.filter((e) => e.userId).map((e) => e.userId!)).size;
 
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Reset selection if it drops out of the current filter window
+  useEffect(() => {
+    if (selectedId && !byProduct.some((r) => r.id === selectedId)) setSelectedId(null);
+  }, [byProduct, selectedId]);
+
+  const bucketing = useMemo(() => {
+    // Choose bucket size + count based on range
+    const now = Date.now();
+    if (range === "24h") return { size: 3600_000, count: 24, fmt: (t: number) => new Date(t).toLocaleTimeString([], { hour: "2-digit" }), start: now - 24 * 3600_000 };
+    if (range === "7d")  return { size: 24 * 3600_000, count: 7, fmt: (t: number) => new Date(t).toLocaleDateString([], { weekday: "short" }), start: now - 7 * 24 * 3600_000 };
+    if (range === "30d") return { size: 24 * 3600_000, count: 30, fmt: (t: number) => new Date(t).toLocaleDateString([], { month: "numeric", day: "numeric" }), start: now - 30 * 24 * 3600_000 };
+    // "all": derive from earliest event, cap to 30 buckets
+    const earliest = filtered.length ? Math.min(...filtered.map((e) => e.at)) : now;
+    const span = Math.max(now - earliest, 3600_000);
+    const size = Math.max(3600_000, Math.ceil(span / 30));
+    const count = Math.min(30, Math.ceil(span / size));
+    return { size, count, fmt: (t: number) => new Date(t).toLocaleDateString([], { month: "numeric", day: "numeric" }), start: now - count * size };
+  }, [range, filtered]);
+
+  const drilldown = useMemo(() => {
+    if (!selectedId) return null;
+    const { size, count, start, fmt } = bucketing;
+    const buckets = Array.from({ length: count }, (_, i) => ({
+      at: start + i * size,
+      label: fmt(start + i * size),
+      impressions: 0, view_details: 0, quick_view: 0, add_to_cart: 0, wishlist: 0, click: 0,
+    }));
+    const idxOf = (t: number) => Math.min(count - 1, Math.max(0, Math.floor((t - start) / size)));
+    let totals = { impressions: 0, view_details: 0, quick_view: 0, add_to_cart: 0, wishlist: 0, click: 0 };
+    for (const e of filtered) {
+      if (e.at < start) continue;
+      const i = idxOf(e.at);
+      if (e.type === "impression") {
+        if (e.productIds?.includes(selectedId)) { buckets[i].impressions++; totals.impressions++; }
+      } else if (e.productId === selectedId) {
+        const k = e.type as keyof typeof totals;
+        if (k in totals) { buckets[i][k]++; totals[k]++; }
+      }
+    }
+    const pct = (n: number) => totals.impressions ? (n / totals.impressions) * 100 : 0;
+    return { buckets, totals, rates: {
+      view_details: pct(totals.view_details),
+      quick_view: pct(totals.quick_view),
+      add_to_cart: pct(totals.add_to_cart),
+    } };
+  }, [selectedId, filtered, bucketing]);
+
+  const selectedProduct = selectedId ? products.find((p) => p.id === selectedId) : null;
+
   const clearAll = () => {
     if (!confirm("Clear all recommendation analytics events?")) return;
     try { localStorage.removeItem("genz.reco.events"); } catch { /* ignore */ }
@@ -2311,7 +2361,10 @@ function RecommendationsAdmin() {
       </div>
 
       <div className="sticker rounded-2xl bg-white overflow-hidden">
-        <div className="p-4 border-b-2 border-ink font-display text-2xl">Top products</div>
+        <div className="p-4 border-b-2 border-ink font-display text-2xl flex items-center justify-between">
+          <span>Top products</span>
+          <span className="text-xs font-sans font-normal text-muted-foreground">Click a row to drill down</span>
+        </div>
         {byProduct.length === 0 ? (
           <div className="p-6 text-center text-muted-foreground text-sm">No events in this range.</div>
         ) : (
@@ -2329,9 +2382,12 @@ function RecommendationsAdmin() {
             <tbody>
               {byProduct.map((row) => {
                 const p = products.find((x) => x.id === row.id);
+                const active = selectedId === row.id;
                 return (
-                  <tr key={row.id} className="border-t border-ink/10">
-                    <td className="p-3">{p?.name ?? row.id}</td>
+                  <tr key={row.id}
+                    onClick={() => setSelectedId(active ? null : row.id)}
+                    className={`border-t border-ink/10 cursor-pointer hover:bg-pop-cyan/20 ${active ? "bg-pop-cyan/40" : ""}`}>
+                    <td className="p-3 font-medium">{p?.name ?? row.id}</td>
                     <td className="p-3">{row.impressions}</td>
                     <td className="p-3">{row.clicks}</td>
                     <td className="p-3">{row.ctr.toFixed(1)}%</td>
@@ -2345,12 +2401,110 @@ function RecommendationsAdmin() {
         )}
       </div>
 
+      {drilldown && selectedId && (
+        <RecoDrilldown
+          productName={selectedProduct?.name ?? selectedId}
+          range={range}
+          data={drilldown}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
+
       <p className="text-xs text-muted-foreground">
         Analytics are captured client-side (localStorage) per browser. Numbers reflect events from this device only.
       </p>
     </div>
   );
 }
+
+function RecoDrilldown({
+  productName, range, data, onClose,
+}: {
+  productName: string;
+  range: string;
+  data: {
+    buckets: { at: number; label: string; impressions: number; view_details: number; quick_view: number; add_to_cart: number; wishlist: number; click: number }[];
+    totals: { impressions: number; view_details: number; quick_view: number; add_to_cart: number; wishlist: number; click: number };
+    rates: { view_details: number; quick_view: number; add_to_cart: number };
+  };
+  onClose: () => void;
+}) {
+  const maxBar = Math.max(1, ...data.buckets.map((b) => b.impressions + b.view_details + b.quick_view + b.add_to_cart));
+  return (
+    <div className="sticker rounded-2xl bg-white overflow-hidden">
+      <div className="p-4 border-b-2 border-ink flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Drill-down · {range}</div>
+          <div className="font-display text-2xl">{productName}</div>
+        </div>
+        <button onClick={onClose} className="chip">Close</button>
+      </div>
+      <div className="p-4 grid sm:grid-cols-3 gap-3">
+        <MetricCard label="View details rate" value={`${data.rates.view_details.toFixed(1)}%`} accent="bg-pop-cyan" />
+        <MetricCard label="Quick view rate" value={`${data.rates.quick_view.toFixed(1)}%`} accent="bg-pop-yellow" />
+        <MetricCard label="Add to cart rate" value={`${data.rates.add_to_cart.toFixed(1)}%`} accent="bg-pop-orange" />
+      </div>
+      <div className="px-4 pb-2 flex flex-wrap gap-3 text-xs">
+        <LegendDot color="bg-pop-cyan" label="Impressions" />
+        <LegendDot color="bg-pop-pink" label="View details" />
+        <LegendDot color="bg-pop-yellow" label="Quick view" />
+        <LegendDot color="bg-pop-orange" label="Add to cart" />
+      </div>
+      <div className="p-4 overflow-x-auto">
+        <div className="flex items-end gap-1 min-w-full h-40">
+          {data.buckets.map((b, i) => {
+            const h = (n: number) => `${(n / maxBar) * 100}%`;
+            return (
+              <div key={i} className="flex-1 min-w-[18px] flex flex-col items-center gap-1" title={`${b.label} · imp ${b.impressions} · vd ${b.view_details} · qv ${b.quick_view} · atc ${b.add_to_cart}`}>
+                <div className="flex-1 w-full flex items-end gap-[2px] justify-center">
+                  <div className="w-1.5 bg-pop-cyan rounded-t" style={{ height: h(b.impressions) }} />
+                  <div className="w-1.5 bg-pop-pink rounded-t" style={{ height: h(b.view_details) }} />
+                  <div className="w-1.5 bg-pop-yellow rounded-t" style={{ height: h(b.quick_view) }} />
+                  <div className="w-1.5 bg-pop-orange rounded-t" style={{ height: h(b.add_to_cart) }} />
+                </div>
+                <div className="text-[9px] text-muted-foreground truncate w-full text-center">{b.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <table className="w-full text-xs">
+        <thead className="bg-ink/5">
+          <tr className="text-left">
+            <th className="p-2">Bucket</th>
+            <th className="p-2">Impressions</th>
+            <th className="p-2">View details</th>
+            <th className="p-2">Quick view</th>
+            <th className="p-2">Add to cart</th>
+            <th className="p-2">ATC rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.buckets.map((b, i) => (
+            <tr key={i} className="border-t border-ink/10">
+              <td className="p-2">{b.label}</td>
+              <td className="p-2">{b.impressions}</td>
+              <td className="p-2">{b.view_details}</td>
+              <td className="p-2">{b.quick_view}</td>
+              <td className="p-2">{b.add_to_cart}</td>
+              <td className="p-2">{b.impressions ? ((b.add_to_cart / b.impressions) * 100).toFixed(1) + "%" : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`inline-block w-3 h-3 rounded ${color} border border-ink`} />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
