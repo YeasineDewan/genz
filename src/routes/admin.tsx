@@ -467,10 +467,64 @@ const MAX_IMAGES = 8;
 const MIN_IMAGES = 1;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
+const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+function TagInput({ value, onChange, placeholder, suggestions = [] }: {
+  value: string[]; onChange: (v: string[]) => void; placeholder?: string; suggestions?: string[];
+}) {
+  const [draft, setDraft] = useState("");
+  const add = (raw: string) => {
+    const t = raw.trim().toLowerCase();
+    if (!t || value.includes(t)) return;
+    onChange([...value, t]);
+  };
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5 items-center border-[3px] border-ink rounded-xl bg-white px-2 py-2">
+        {value.map((v) => (
+          <span key={v} className="chip text-xs bg-pop-yellow py-0.5">
+            {v}
+            <button type="button" onClick={() => onChange(value.filter((x) => x !== v))} className="ml-1"><X size={10}/></button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(draft); setDraft(""); }
+            if (e.key === "Backspace" && !draft && value.length) onChange(value.slice(0, -1));
+          }}
+          onBlur={() => { add(draft); setDraft(""); }}
+          placeholder={value.length ? "" : placeholder}
+          className="flex-1 min-w-24 bg-transparent outline-none text-sm py-0.5"
+        />
+      </div>
+      {suggestions.filter((s) => !value.includes(s)).length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {suggestions.filter((s) => !value.includes(s)).map((s) => (
+            <button type="button" key={s} onClick={() => add(s)} className="chip text-[10px] py-0 px-2 opacity-70 hover:opacity-100">+ {s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PRODUCT_TABS = ["basics", "media", "inventory", "seo"] as const;
+type ProductTab = typeof PRODUCT_TABS[number];
+
 function ProductDrawer({ product, onClose }: { product: Product; onClose: () => void }) {
   const categories = useCategories();
+  const allProducts = useProducts();
   const [p, setP] = useState<Product>({ ...product, images: product.images ?? (product.image ? [product.image] : []) });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [tab, setTab] = useState<ProductTab>("basics");
+  const [dirty, setDirty] = useState(false);
+  const isNew = !product.name;
+
+  const update = (patch: Partial<Product>) => { setDirty(true); setP((cur) => ({ ...cur, ...patch })); };
+
+  const effectiveSlug = p.slug ? slugify(p.slug) : slugify(p.name);
 
   const validate = (): { ok: boolean; errs: Record<string, string> } => {
     const errs: Record<string, string> = {};
@@ -483,28 +537,49 @@ function ProductDrawer({ product, onClose }: { product: Product; onClose: () => 
     if (!p.category) errs.category = "Category is required";
     if (p.colors.length === 0) errs.colors = "At least one color required";
     if (p.sizes.length === 0) errs.sizes = "At least one size required";
+    if (!effectiveSlug) errs.slug = "Slug could not be generated";
+    else if (allProducts.some((x) => x.id !== p.id && x.slug === effectiveSlug)) errs.slug = "Another product already uses this URL";
     const imgs = p.images ?? [];
     if (imgs.length < MIN_IMAGES) errs.images = `At least ${MIN_IMAGES} image required`;
     else if (imgs.length > MAX_IMAGES) errs.images = `Max ${MAX_IMAGES} images allowed`;
     return { ok: Object.keys(errs).length === 0, errs };
   };
 
+  const live = validate();
+  const tabOf: Record<string, ProductTab> = {
+    name: "basics", description: "basics", price: "basics", category: "basics",
+    colors: "inventory", sizes: "inventory", stock: "inventory",
+    images: "media", slug: "seo",
+  };
+
+  const close = () => {
+    if (dirty && !confirm("Discard unsaved changes?")) return;
+    onClose();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     const { ok, errs } = validate();
     setErrors(errs);
     if (!ok) {
+      const first = Object.keys(errs)[0];
+      if (first && tabOf[first]) setTab(tabOf[first]);
       toast.error(Object.values(errs)[0] ?? "Please fix the errors");
       return;
     }
-    const slug = p.slug || p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
     const images = p.images ?? [];
-    const image = images[0];
     saveProduct(
-      { ...p, slug, image, images },
-      { stockSource: product.name ? "product_edit" : "product_create", stockNote: `Saved by admin` },
+      { ...p, slug: effectiveSlug, image: images[0], images },
+      { stockSource: isNew ? "product_create" : "product_edit", stockNote: `Saved by admin` },
     );
-    toast.success("Saved");
+    toast.success(isNew ? "Product created" : "Changes saved");
+    setDirty(false);
     onClose();
   };
 
@@ -529,82 +604,209 @@ function ProductDrawer({ product, onClose }: { product: Product; onClose: () => 
       const r = new FileReader();
       r.onload = () => res(String(r.result));
       r.readAsDataURL(f);
-    }))).then((data) => setP((cur) => ({ ...cur, images: [...(cur.images ?? []), ...data] })));
+    }))).then((data) => update({ images: [...(p.images ?? []), ...data] }));
   };
 
-  const removeImg = (i: number) => setP({ ...p, images: (p.images ?? []).filter((_, j) => j !== i) });
+  const removeImg = (i: number) => update({ images: (p.images ?? []).filter((_, j) => j !== i) });
   const moveImg = (i: number, dir: -1 | 1) => {
     const imgs = [...(p.images ?? [])]; const j = i + dir;
     if (j < 0 || j >= imgs.length) return;
     [imgs[i], imgs[j]] = [imgs[j], imgs[i]];
-    setP({ ...p, images: imgs });
+    update({ images: imgs });
   };
+  const makeCover = (i: number) => {
+    const imgs = [...(p.images ?? [])];
+    const [pick] = imgs.splice(i, 1);
+    update({ images: [pick, ...imgs] });
+  };
+
+  const completion = (() => {
+    const checks = [!!p.name.trim(), !!p.description.trim(), p.price > 0, !!p.category, (p.images ?? []).length > 0, p.colors.length > 0, p.sizes.length > 0];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  })();
+
+  const metaTitle = `${p.name || "Product"} — GenZ`;
+  const metaDesc = p.description.trim().slice(0, 160);
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-ink/40" onClick={onClose}/>
-      <form onSubmit={save} className="w-full max-w-lg bg-paper border-l-[3px] border-ink overflow-auto">
-        <div className="p-4 border-b-[3px] border-ink bg-pop-cyan flex items-center justify-between sticky top-0 z-10">
-          <h3 className="text-2xl">{product.name ? "Edit product" : "New product"}</h3>
-          <button type="button" onClick={onClose} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white"><X size={16}/></button>
-        </div>
-        <div className="p-4 space-y-3">
-          <Field label="Name" error={errors.name}><input value={p.name} onChange={(e)=>setP({...p,name:e.target.value})} className="inp" maxLength={80}/></Field>
-          <Field label="Slug (url)"><input value={p.slug} onChange={(e)=>setP({...p,slug:e.target.value})} placeholder="auto-generated" className="inp"/></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Price" error={errors.price}><input type="number" step="0.01" min="0" value={p.price} onChange={(e)=>setP({...p,price:+e.target.value})} className="inp"/></Field>
-            <Field label="Stock" error={errors.stock}><input type="number" min="0" value={p.stock} onChange={(e)=>setP({...p,stock:+e.target.value})} className="inp"/></Field>
+      <div className="flex-1 bg-ink/50 backdrop-blur-[2px]" onClick={close}/>
+      <form onSubmit={save} className="w-full max-w-2xl bg-paper border-l-[3px] border-ink flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b-[3px] border-ink bg-pop-cyan">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">{isNew ? "Create" : "Editing"}</div>
+              <h3 className="text-2xl truncate">{p.name || "New product"}</h3>
+              <div className="text-xs font-mono opacity-70 truncate">/product/{effectiveSlug || "…"}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {dirty && <span className="chip bg-pop-orange text-[10px] py-0">Unsaved</span>}
+              <button type="button" onClick={close} className="h-9 w-9 grid place-items-center rounded-full border-2 border-ink bg-white"><X size={16}/></button>
+            </div>
           </div>
-          <Field label="Category" error={errors.category}>
-            <select value={p.category} onChange={(e)=>setP({...p,category:e.target.value})} className="inp">
-              <option value="">— select —</option>
-              {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Colors (comma-separated)" error={errors.colors}>
-            <input value={p.colors.join(",")} onChange={(e)=>setP({...p,colors:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)})} className="inp"/>
-          </Field>
-          <Field label="Sizes (comma-separated)" error={errors.sizes}>
-            <input value={p.sizes.join(",")} onChange={(e)=>setP({...p,sizes:e.target.value.split(",").map(s=>s.trim()).filter(Boolean)})} className="inp"/>
-          </Field>
-          <Field label="Badge (optional)">
-            <input value={p.badge ?? ""} onChange={(e)=>setP({...p,badge:e.target.value || undefined})} className="inp"/>
-          </Field>
-          <Field label="Description" error={errors.description}>
-            <textarea value={p.description} onChange={(e)=>setP({...p,description:e.target.value})} className="inp min-h-24" maxLength={1000}/>
-            <div className="text-[10px] text-muted-foreground mt-1 text-right">{p.description.length}/1000</div>
-          </Field>
+          <div className="mt-3 flex items-center gap-2">
+            <div className="flex-1 h-2 rounded-full bg-ink/15 overflow-hidden">
+              <div className="h-full bg-ink transition-all" style={{ width: `${completion}%` }}/>
+            </div>
+            <span className="text-[10px] font-bold">{completion}% complete</span>
+          </div>
+        </div>
 
-          <Field label={`Images (${(p.images ?? []).length}/${MAX_IMAGES} — first = cover)`} error={errors.images}>
-            <label className="block border-[3px] border-dashed border-ink rounded-xl p-4 text-center bg-white cursor-pointer hover:bg-pop-yellow/30">
-              <input type="file" multiple accept={ACCEPTED_TYPES.join(",")} className="hidden"
-                onChange={(e) => e.target.files && onFiles(e.target.files)}/>
-              <ImagePlus className="mx-auto mb-1"/>
-              <div className="text-sm font-bold">Upload images</div>
-              <div className="text-xs text-muted-foreground">PNG, JPG, WEBP, GIF — max 2MB each, up to {MAX_IMAGES} total</div>
-            </label>
-            {(p.images ?? []).length > 0 && (
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                {(p.images ?? []).map((src, i) => (
-                  <div key={i} className="relative group sticker-sm rounded-lg overflow-hidden bg-white">
-                    <img src={src} className="aspect-square object-cover w-full" alt=""/>
-                    {i === 0 && <span className="absolute top-1 left-1 chip bg-pop-pink text-white text-[10px] px-1.5 py-0">COVER</span>}
-                    <div className="absolute inset-x-0 bottom-0 flex justify-between p-1 bg-ink/70 opacity-0 group-hover:opacity-100 transition">
-                      <button type="button" onClick={()=>moveImg(i,-1)} className="text-white text-xs px-1">◀</button>
-                      <GripVertical size={12} className="text-white"/>
-                      <button type="button" onClick={()=>moveImg(i,1)} className="text-white text-xs px-1">▶</button>
-                    </div>
-                    <button type="button" onClick={()=>removeImg(i)}
-                      className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-white border-2 border-ink grid place-items-center"><X size={12}/></button>
+        {/* Tabs */}
+        <div className="flex gap-1 px-4 pt-3 border-b-[3px] border-ink bg-white">
+          {PRODUCT_TABS.map((t) => {
+            const bad = Object.keys(live.errs).some((k) => tabOf[k] === t);
+            return (
+              <button key={t} type="button" onClick={() => setTab(t)}
+                className={`relative px-4 py-2 text-xs font-bold uppercase rounded-t-xl border-[3px] border-b-0 ${tab === t ? "border-ink bg-paper -mb-[3px]" : "border-transparent opacity-60 hover:opacity-100"}`}>
+                {t}
+                {bad && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-destructive"/>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Body */}
+        <div className="p-4 space-y-3 overflow-auto flex-1">
+          {tab === "basics" && (
+            <>
+              <Field label="Name" error={errors.name}>
+                <input value={p.name} onChange={(e)=>update({name:e.target.value})} className="inp" maxLength={80} placeholder="e.g. Neon Puffer Jacket"/>
+                <div className="text-[10px] text-muted-foreground mt-1 text-right">{p.name.length}/80</div>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Price" error={errors.price}>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-sm">$</span>
+                    <input type="number" step="0.01" min="0" value={p.price} onChange={(e)=>update({price:+e.target.value})} className="inp pl-7"/>
                   </div>
-                ))}
+                </Field>
+                <Field label="Category" error={errors.category}>
+                  <select value={p.category} onChange={(e)=>update({category:e.target.value})} className="inp">
+                    <option value="">— select —</option>
+                    {categories.map((c) => <option key={c.id} value={c.slug}>{c.name}</option>)}
+                  </select>
+                </Field>
               </div>
-            )}
-          </Field>
+              <Field label="Badge (optional)">
+                <input value={p.badge ?? ""} onChange={(e)=>update({badge:e.target.value || undefined})} className="inp" placeholder="NEW · LIMITED · SALE"/>
+                <div className="flex gap-1 mt-1.5">
+                  {["NEW", "HOT", "LIMITED", "SALE"].map((b) => (
+                    <button type="button" key={b} onClick={()=>update({badge:b})} className="chip text-[10px] py-0 px-2">{b}</button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Description" error={errors.description}>
+                <textarea value={p.description} onChange={(e)=>update({description:e.target.value})} className="inp min-h-32" maxLength={1000}
+                  placeholder="Tell the story — fabric, fit, vibe."/>
+                <div className="text-[10px] text-muted-foreground mt-1 text-right">{p.description.length}/1000</div>
+              </Field>
+            </>
+          )}
 
-          <VariantMatrix product={p} onChange={(variants, total) => setP({ ...p, variants, stock: total })}/>
+          {tab === "media" && (
+            <Field label={`Images (${(p.images ?? []).length}/${MAX_IMAGES} — first = cover)`} error={errors.images}>
+              <label className="block border-[3px] border-dashed border-ink rounded-xl p-6 text-center bg-white cursor-pointer hover:bg-pop-yellow/30 transition"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) onFiles(e.dataTransfer.files); }}>
+                <input type="file" multiple accept={ACCEPTED_TYPES.join(",")} className="hidden"
+                  onChange={(e) => e.target.files && onFiles(e.target.files)}/>
+                <ImagePlus className="mx-auto mb-1"/>
+                <div className="text-sm font-bold">Drop images here or click to upload</div>
+                <div className="text-xs text-muted-foreground">PNG, JPG, WEBP, GIF — max 2MB each, up to {MAX_IMAGES} total</div>
+              </label>
+              {(p.images ?? []).length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  {(p.images ?? []).map((src, i) => (
+                    <div key={i} className="relative group sticker-sm rounded-lg overflow-hidden bg-white">
+                      <img src={src} className="aspect-square object-cover w-full" alt=""/>
+                      {i === 0 ? (
+                        <span className="absolute top-1 left-1 chip bg-pop-pink text-white text-[10px] px-1.5 py-0">COVER</span>
+                      ) : (
+                        <button type="button" onClick={()=>makeCover(i)}
+                          className="absolute top-1 left-1 chip bg-white text-[10px] px-1.5 py-0 opacity-0 group-hover:opacity-100 transition">Set cover</button>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 flex justify-between p-1 bg-ink/70 opacity-0 group-hover:opacity-100 transition">
+                        <button type="button" onClick={()=>moveImg(i,-1)} className="text-white text-xs px-1">◀</button>
+                        <GripVertical size={12} className="text-white"/>
+                        <button type="button" onClick={()=>moveImg(i,1)} className="text-white text-xs px-1">▶</button>
+                      </div>
+                      <button type="button" onClick={()=>removeImg(i)}
+                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-destructive text-white border-2 border-ink grid place-items-center"><X size={12}/></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Field>
+          )}
 
-          <button className="btn-pop w-full justify-center mt-3">Save product</button>
+          {tab === "inventory" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Colors" error={errors.colors}>
+                  <TagInput value={p.colors} onChange={(colors)=>update({colors})} placeholder="type + Enter"
+                    suggestions={["pink","cyan","yellow","orange","black","white"]}/>
+                </Field>
+                <Field label="Sizes" error={errors.sizes}>
+                  <TagInput value={p.sizes} onChange={(sizes)=>update({sizes})} placeholder="type + Enter"
+                    suggestions={["xs","s","m","l","xl"]}/>
+                </Field>
+              </div>
+              <Field label="Total stock" error={errors.stock}>
+                <input type="number" min="0" value={p.stock} onChange={(e)=>update({stock:+e.target.value})} className="inp"
+                  disabled={!!(p.variants && p.variants.length)}/>
+                {!!(p.variants && p.variants.length) && (
+                  <div className="text-[10px] text-muted-foreground mt-1">Auto-calculated from the variant matrix below.</div>
+                )}
+              </Field>
+              <VariantMatrix product={p} onChange={(variants, total) => update({ variants, stock: total })}/>
+            </>
+          )}
+
+          {tab === "seo" && (
+            <>
+              <Field label="URL slug" error={errors.slug}>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-mono text-muted-foreground shrink-0">/product/</span>
+                  <input value={p.slug} onChange={(e)=>update({slug:e.target.value})} placeholder={slugify(p.name) || "auto-generated"} className="inp"/>
+                  {p.slug && <button type="button" onClick={()=>update({slug:""})} className="chip text-[10px]">Auto</button>}
+                </div>
+              </Field>
+              <div className="sticker rounded-2xl bg-white p-4">
+                <div className="text-[10px] uppercase font-bold text-muted-foreground mb-2">Search preview</div>
+                <div className="text-xs text-green-700 truncate">genz.shop › product › {effectiveSlug || "…"}</div>
+                <div className="text-[#1a0dab] text-lg leading-snug truncate">{metaTitle}</div>
+                <div className="text-sm text-muted-foreground line-clamp-2">{metaDesc || "Add a description to control how this product looks in Google."}</div>
+                <div className={`mt-2 text-[10px] font-bold ${metaDesc.length < 70 ? "text-pop-orange" : "text-green-700"}`}>
+                  {metaDesc.length}/160 description characters {metaDesc.length < 70 ? "— aim for 70+" : "— looks good"}
+                </div>
+              </div>
+              <div className="sticker rounded-2xl bg-white p-4">
+                <div className="text-[10px] uppercase font-bold text-muted-foreground mb-2">Storefront card preview</div>
+                <div className="w-40 sticker-sm rounded-xl overflow-hidden bg-white">
+                  {(p.images ?? [])[0]
+                    ? <img src={(p.images ?? [])[0]} alt="" className="aspect-square object-cover w-full"/>
+                    : <div className="aspect-square grid place-items-center bg-muted text-xs text-muted-foreground">No image</div>}
+                  <div className="p-2 border-t-[3px] border-ink">
+                    <div className="font-bold text-xs truncate">{p.name || "Product name"}</div>
+                    <div className="text-xs">{formatPrice(p.price || 0)}</div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Sticky footer */}
+        <div className="p-4 border-t-[3px] border-ink bg-white flex items-center gap-3">
+          <div className="text-xs flex-1">
+            {live.ok
+              ? <span className="font-bold text-green-700 flex items-center gap-1"><Check size={14}/> Ready to publish</span>
+              : <span className="font-bold text-destructive flex items-center gap-1"><AlertTriangle size={14}/> {Object.keys(live.errs).length} issue(s) to fix</span>}
+          </div>
+          <button type="button" onClick={close} className="chip">Cancel</button>
+          <button className="btn-pop"><Save size={16}/> {isNew ? "Create product" : "Save changes"}</button>
         </div>
         <style>{`.inp{width:100%;border:3px solid var(--ink);border-radius:12px;padding:.6rem .8rem;background:white;outline:none}`}</style>
       </form>
