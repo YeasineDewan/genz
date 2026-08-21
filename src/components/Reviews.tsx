@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Stars } from "./Stars";
-import { useUser, useProductReviews, addReview, deleteReview, reportReview } from "@/lib/store";
+import { useUser, useProductReviews, addReview, deleteReview, reportReview, updateReview } from "@/lib/store";
 import { REPORT_REASONS, type ReportReason } from "@/lib/types";
-import { Trash2, Flag, X } from "lucide-react";
+import { Trash2, Flag, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 export function Reviews({ productId }: { productId: string }) {
