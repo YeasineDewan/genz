@@ -10,6 +10,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { seedProducts } from "@/lib/seed";
+import { getRequestOrigin } from "@/lib/origin.functions";
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
