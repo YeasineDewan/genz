@@ -2079,6 +2079,11 @@ function ReviewsModeration() {
                           <span className="font-bold text-ink">{r.userName}</span>
                           <span>·</span>
                           <span title={new Date(r.at).toLocaleString()}>{new Date(r.at).toLocaleDateString()}</span>
+                          {r.editedAt && (
+                            <span className="chip bg-pop-yellow text-[10px]" title={`Edited ${new Date(r.editedAt).toLocaleString()}`}>
+                              edited by customer
+                            </span>
+                          )}
                         </div>
                         {reports > 0 && (
                           <ReportBreakdown reports={r.reportLog ?? []} total={reports}/>
