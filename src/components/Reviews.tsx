@@ -13,6 +13,23 @@ export function Reviews({ productId }: { productId: string }) {
   const [body, setBody] = useState("");
   const [open, setOpen] = useState(false);
   const [reportingId, setReportingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [eRating, setERating] = useState(5);
+  const [eTitle, setETitle] = useState("");
+  const [eBody, setEBody] = useState("");
+
+  const startEdit = (r: { id: string; rating: number; title: string; body: string }) => {
+    setEditingId(r.id); setERating(r.rating); setETitle(r.title); setEBody(r.body);
+  };
+  const saveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingId) return;
+    if (!eTitle.trim()) { toast.error("Add a title"); return; }
+    if (!eBody.trim() || eBody.length > 1000) { toast.error("Review must be 1–1000 chars"); return; }
+    updateReview(editingId, { rating: eRating, title: eTitle.trim(), body: eBody.trim() });
+    setEditingId(null);
+    toast.success("Review updated");
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
