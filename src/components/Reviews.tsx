@@ -99,12 +99,33 @@ export function Reviews({ productId }: { productId: string }) {
               <ul className="space-y-4">
                 {reviews.map((r) => (
                   <li key={r.id} className="border-b border-ink/10 pb-4 last:border-0">
+                    {editingId === r.id ? (
+                      <form onSubmit={saveEdit} className="border-[3px] border-ink rounded-xl p-4 bg-pop-cyan/20">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-xs font-bold uppercase">Your rating</span>
+                          <Stars value={eRating} size={22} onChange={setERating}/>
+                        </div>
+                        <input value={eTitle} onChange={(e) => setETitle(e.target.value)} maxLength={80}
+                          placeholder="Title" className="w-full border-2 border-ink rounded-lg px-3 py-2 mb-2 bg-white"/>
+                        <textarea value={eBody} onChange={(e) => setEBody(e.target.value)} maxLength={1000}
+                          className="w-full border-2 border-ink rounded-lg px-3 py-2 bg-white min-h-24"/>
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-muted-foreground">{eBody.length}/1000</span>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setEditingId(null)} className="chip">Cancel</button>
+                            <button className="btn-pop">Save changes</button>
+                          </div>
+                        </div>
+                      </form>
+                    ) : (
+                    <>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Stars value={r.rating} size={14}/>
                         <div className="font-bold mt-1">{r.title}</div>
                         <div className="text-xs text-muted-foreground">
                           by {r.userName} · {new Date(r.at).toLocaleDateString()}
+                          {r.editedAt && <span className="italic"> · edited</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -113,14 +134,22 @@ export function Reviews({ productId }: { productId: string }) {
                           <Flag size={14}/>
                         </button>
                         {user?.id === r.userId && (
-                          <button onClick={() => { deleteReview(r.id); toast.success("Removed"); }}
-                            className="text-muted-foreground hover:text-destructive" aria-label="Delete">
-                            <Trash2 size={14}/>
-                          </button>
+                          <>
+                            <button onClick={() => startEdit(r)}
+                              className="text-muted-foreground hover:text-pop-cyan" aria-label="Edit">
+                              <Pencil size={14}/>
+                            </button>
+                            <button onClick={() => { deleteReview(r.id); toast.success("Removed"); }}
+                              className="text-muted-foreground hover:text-destructive" aria-label="Delete">
+                              <Trash2 size={14}/>
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
                     <p className="mt-2 text-sm whitespace-pre-wrap">{r.body}</p>
+                    </>
+                    )}
                   </li>
                 ))}
               </ul>
