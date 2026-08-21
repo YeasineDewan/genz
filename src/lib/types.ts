@@ -163,6 +163,7 @@ export interface Review {
   status?: ReviewStatus; // default approved (back-compat)
   reports?: number;
   reportLog?: ReviewReport[];
+  editedAt?: number;
 }
 
 export const REPORT_REASONS: { value: ReportReason; label: string; description: string }[] = [

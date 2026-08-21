@@ -10,14 +10,85 @@ import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { seedProducts } from "@/lib/seed";
+import { getRequestOrigin } from "@/lib/origin.functions";
 
 export const Route = createFileRoute("/product/$slug")({
-  head: ({ params }) => ({
-    meta: [
-      { title: `${params.slug.replace(/-/g, " ")} — GenZ` },
-      { name: "description", content: "Loud streetwear by GenZ." },
-    ],
-  }),
+  loader: async ({ params }) => {
+    const origin = await getRequestOrigin();
+    const p = seedProducts.find((x) => x.slug === params.slug) ?? null;
+    return { origin, seed: p };
+  },
+  head: ({ params, loaderData }) => {
+    const p = loaderData?.seed;
+    const origin = loaderData?.origin ?? "";
+    const url = `/product/${params.slug}`;
+    const name = p?.name ?? params.slug.replace(/-/g, " ");
+    const title = `${name} — GenZ Streetwear`;
+    const description = p
+      ? `${p.description} Shop ${p.name} in ${p.colors.join(", ")} — ${formatPrice(p.price)}, free shipping over $80.`.slice(0, 158)
+      : `Shop ${name} at GenZ — loud streetwear, free shipping over $80.`;
+    const image = p?.image && origin ? `${origin}${p.image}` : undefined;
+
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "product" },
+        { property: "og:url", content: url },
+        { name: "twitter:card", content: "summary_large_image" },
+        ...(image
+          ? [
+              { property: "og:image", content: image },
+              { name: "twitter:image", content: image },
+            ]
+          : []),
+      ],
+      links: [{ rel: "canonical", href: url }],
+      scripts: p
+        ? [
+            {
+              type: "application/ld+json",
+              children: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                name: p.name,
+                description: p.description,
+                sku: p.id,
+                ...(image ? { image: [image] } : {}),
+                category: p.category,
+                color: p.colors.join(", "),
+                brand: { "@type": "Brand", name: "GenZ" },
+                offers: {
+                  "@type": "Offer",
+                  url,
+                  price: p.price,
+                  priceCurrency: "USD",
+                  availability:
+                    (p.stock ?? 0) > 0
+                      ? "https://schema.org/InStock"
+                      : "https://schema.org/OutOfStock",
+                },
+              }),
+            },
+            {
+              type: "application/ld+json",
+              children: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "Home", item: "/" },
+                  { "@type": "ListItem", position: 2, name: "Shop", item: "/shop" },
+                  { "@type": "ListItem", position: 3, name: p.name, item: url },
+                ],
+              }),
+            },
+          ]
+        : [],
+    };
+  },
   component: ProductPage,
   notFoundComponent: () => (
     <Layout>

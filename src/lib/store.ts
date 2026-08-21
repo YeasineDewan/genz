@@ -668,6 +668,19 @@ export const addReview = (r: Omit<Review, "id" | "at">): Review => {
   write(KEYS.reviews, list);
   return review;
 };
+export const updateReview = (
+  id: string,
+  patch: { rating?: number; title?: string; body?: string },
+) => {
+  const list = getReviews();
+  const r = list.find((x) => x.id === id);
+  if (!r) return;
+  if (patch.rating != null) r.rating = patch.rating;
+  if (patch.title != null) r.title = patch.title;
+  if (patch.body != null) r.body = patch.body;
+  r.editedAt = Date.now();
+  write(KEYS.reviews, list);
+};
 export const deleteReview = (id: string) => write(KEYS.reviews, getReviews().filter((r) => r.id !== id));
 export const setReviewStatus = (id: string, status: ReviewStatus) => {
   const list = getReviews();
