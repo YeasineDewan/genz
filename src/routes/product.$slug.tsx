@@ -7,7 +7,7 @@ import { WishlistButton } from "@/components/WishlistButton";
 import { Stars } from "@/components/Stars";
 import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, sizeHasStock, colorHasStock } from "@/lib/store";
 import { useEffect, useMemo, useState } from "react";
-import { ShoppingBag, Truck, RotateCcw, Shield } from "lucide-react";
+import { ShoppingBag, Truck, RotateCcw, Shield, Share2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { seedProducts } from "@/lib/seed";
