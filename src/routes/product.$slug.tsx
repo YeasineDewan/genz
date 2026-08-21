@@ -256,10 +256,54 @@ function ProductPage() {
             <p className="text-xs text-muted-foreground mt-2">Max available: {variantStock}</p>
           )}
 
+          <div className="mt-4">
+            <button
+              onClick={async () => {
+                const url = typeof window !== "undefined" ? window.location.href : "";
+                try {
+                  if (typeof navigator !== "undefined" && navigator.share) {
+                    await navigator.share({ title: product.name, text: product.description, url });
+                  } else {
+                    await navigator.clipboard.writeText(url);
+                    toast.success("Link copied");
+                  }
+                } catch { /* user cancelled */ }
+              }}
+              className="chip hover:bg-pop-yellow transition"
+            >
+              <Share2 size={14}/> Share this product
+            </button>
+          </div>
+
           <div className="mt-8 grid grid-cols-3 gap-2 text-xs">
             <div className="sticker-sm rounded-xl p-3 bg-white"><Truck size={16} className="mb-1"/>Free ship $80+</div>
             <div className="sticker-sm rounded-xl p-3 bg-white"><RotateCcw size={16} className="mb-1"/>14-day returns</div>
             <div className="sticker-sm rounded-xl p-3 bg-white"><Shield size={16} className="mb-1"/>Quality promise</div>
+          </div>
+
+          <div className="mt-8 space-y-2">
+            {[
+              {
+                q: "Details & materials",
+                a: `${product.description} Available in ${product.colors.join(", ")}. Sizes: ${product.sizes.join(", ")}.`,
+              },
+              {
+                q: "Shipping",
+                a: "Dispatched in 1–2 business days. Free standard shipping on orders over $80, express available at checkout.",
+              },
+              {
+                q: "Returns & exchanges",
+                a: "14-day returns on unworn items with tags attached. Exchanges are free once per order.",
+              },
+            ].map((row) => (
+              <details key={row.q} className="sticker-sm rounded-xl bg-white p-3 group">
+                <summary className="cursor-pointer font-bold text-sm flex items-center justify-between list-none">
+                  {row.q}
+                  <ChevronDown size={16} className="transition-transform group-open:rotate-180"/>
+                </summary>
+                <p className="mt-2 text-sm text-muted-foreground">{row.a}</p>
+              </details>
+            ))}
           </div>
         </motion.div>
       </section>
