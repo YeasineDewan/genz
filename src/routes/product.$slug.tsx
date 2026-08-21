@@ -164,6 +164,15 @@ function ProductPage() {
 
   return (
     <Layout>
+      <nav aria-label="Breadcrumb" className="mx-auto max-w-6xl px-4 pt-6">
+        <ol className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+          <li><Link to="/" className="hover:text-ink underline-offset-2 hover:underline">Home</Link></li>
+          <li><ChevronRight size={12}/></li>
+          <li><Link to="/shop" className="hover:text-ink underline-offset-2 hover:underline">Shop</Link></li>
+          <li><ChevronRight size={12}/></li>
+          <li className="font-bold text-ink truncate max-w-[50vw]">{product.name}</li>
+        </ol>
+      </nav>
       <section className="mx-auto max-w-6xl px-4 py-10 grid md:grid-cols-2 gap-10">
         <ProductGallery images={product.images && product.images.length > 0 ? product.images : [product.image]} alt={product.name} />
 
