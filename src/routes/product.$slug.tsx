@@ -3,6 +3,8 @@ import { Layout } from "@/components/Layout";
 import { ProductGallery } from "@/components/ProductGallery";
 import { Reviews } from "@/components/Reviews";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { RelatedCarousel } from "@/components/RelatedCarousel";
+
 import { WishlistButton } from "@/components/WishlistButton";
 import { Stars } from "@/components/Stars";
 import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, sizeHasStock, colorHasStock } from "@/lib/store";
@@ -21,8 +23,9 @@ export const Route = createFileRoute("/product/$slug")({
   },
   head: ({ params, loaderData }) => {
     const p = loaderData?.seed;
-    const origin = loaderData?.origin ?? "";
-    const url = `/product/${params.slug}`;
+    const origin = loaderData?.origin ?? "https://gentle-store-forge.lovable.app";
+    const url = `${origin}/product/${params.slug}`;
+
     const name = p?.name ?? params.slug.replace(/-/g, " ");
     const title = `${name} — GenZ Streetwear`;
     const description = p
@@ -160,7 +163,13 @@ function ProductPage() {
     : variantStock <= 10 ? { label: `Low stock — ${variantStock} left`, cls: "bg-pop-orange" }
     : { label: "In stock", cls: "bg-pop-cyan" };
 
-  const related = products.filter((p) => p.id !== product.id && p.category === product.category).slice(0, 4);
+  const related = (() => {
+    const same = products.filter((p) => p.id !== product.id && p.category === product.category);
+    if (same.length >= 8) return same.slice(0, 12);
+    const others = products.filter((p) => p.id !== product.id && p.category !== product.category);
+    return [...same, ...others].slice(0, 12);
+  })();
+
 
   return (
     <Layout>
@@ -319,19 +328,8 @@ function ProductPage() {
 
       <Reviews productId={product.id}/>
 
-      {related.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-16">
-          <h2 className="text-3xl mb-6">You'll also love</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {related.map((p) => (
-              <Link key={p.id} to="/product/$slug" params={{ slug: p.slug }} className="sticker rounded-2xl overflow-hidden bg-white hover:translate-y-[-3px] transition">
-                <img src={p.image} alt={p.name} className="aspect-square object-cover w-full" loading="lazy"/>
-                <div className="p-3 border-t-[3px] border-ink flex justify-between"><span className="font-bold truncate">{p.name}</span><span>{formatPrice(p.price)}</span></div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      <RelatedCarousel products={related} />
+
 
       <RecentlyViewed excludeId={product.id}/>
     </Layout>
