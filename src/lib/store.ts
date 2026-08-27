@@ -729,14 +729,52 @@ export const toggleWishlist = (productId: string): boolean => {
 };
 export const isWishlisted = (productId: string) => getWishlist().includes(productId);
 
-// --- Recently viewed ---
-export const getRecent = (): string[] => read(KEYS.recent, []);
+// --- Recently viewed (localStorage + cookie mirror for returning visitors) ---
+const RECENT_COOKIE = "genz_recent";
+const RECENT_MAX = 12;
+
+const readRecentCookie = (): string[] => {
+  if (typeof document === "undefined") return [];
+  const m = document.cookie.split("; ").find((c) => c.startsWith(`${RECENT_COOKIE}=`));
+  if (!m) return [];
+  try {
+    return decodeURIComponent(m.split("=")[1] ?? "").split(",").filter(Boolean);
+  } catch { return []; }
+};
+
+const writeRecentCookie = (ids: string[]) => {
+  if (typeof document === "undefined") return;
+  const maxAge = 60 * 60 * 24 * 90; // 90 days
+  document.cookie = `${RECENT_COOKIE}=${encodeURIComponent(ids.join(","))}; path=/; max-age=${maxAge}; samesite=lax`;
+};
+
+export const getRecent = (): string[] => {
+  const local = read<string[]>(KEYS.recent, []);
+  if (local.length > 0) return local;
+  const cookie = readRecentCookie();
+  if (cookie.length > 0) write(KEYS.recent, cookie);
+  return cookie;
+};
+
 export const trackRecent = (productId: string) => {
   const cur = getRecent().filter((id) => id !== productId);
   cur.unshift(productId);
-  if (cur.length > 12) cur.length = 12;
+  if (cur.length > RECENT_MAX) cur.length = RECENT_MAX;
   write(KEYS.recent, cur);
+  writeRecentCookie(cur);
 };
+
+export const clearRecent = () => {
+  write(KEYS.recent, []);
+  writeRecentCookie([]);
+};
+
+export const removeRecent = (productId: string) => {
+  const cur = getRecent().filter((id) => id !== productId);
+  write(KEYS.recent, cur);
+  writeRecentCookie(cur);
+};
+
 
 // --- Coupons ---
 export const getCoupons = (): Coupon[] => read(KEYS.coupons, []);
@@ -835,7 +873,10 @@ export const useWishlist = () => {
   const user = useUser();
   return useMemo(() => all[user?.id ?? "guest"] ?? [], [all, user]);
 };
-export const useRecent = () => useStore(() => read<string[]>(KEYS.recent, []));
+export const useRecent = () => useStore(() => {
+  const local = read<string[]>(KEYS.recent, []);
+  return local.length > 0 ? local : readRecentCookie();
+});
 export const useCoupons = () => useStore(getCoupons);
 export const useNotifications = () => {
   const u = useUser();
