@@ -873,7 +873,10 @@ export const useWishlist = () => {
   const user = useUser();
   return useMemo(() => all[user?.id ?? "guest"] ?? [], [all, user]);
 };
-export const useRecent = () => useStore(() => read<string[]>(KEYS.recent, []));
+export const useRecent = () => useStore(() => {
+  const local = read<string[]>(KEYS.recent, []);
+  return local.length > 0 ? local : readRecentCookie();
+});
 export const useCoupons = () => useStore(getCoupons);
 export const useNotifications = () => {
   const u = useUser();
