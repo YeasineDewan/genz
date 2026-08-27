@@ -23,8 +23,9 @@ export const Route = createFileRoute("/product/$slug")({
   },
   head: ({ params, loaderData }) => {
     const p = loaderData?.seed;
-    const origin = loaderData?.origin ?? "";
-    const url = `/product/${params.slug}`;
+    const origin = loaderData?.origin ?? "https://gentle-store-forge.lovable.app";
+    const url = `${origin}/product/${params.slug}`;
+
     const name = p?.name ?? params.slug.replace(/-/g, " ");
     const title = `${name} — GenZ Streetwear`;
     const description = p
