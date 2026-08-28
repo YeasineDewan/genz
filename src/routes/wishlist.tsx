@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Layout } from "@/components/Layout";
+import { Layout, openCartDrawer } from "@/components/Layout";
 import {
   useProducts, useWishlist, useUser, addToCart, toggleWishlist,
   formatPrice, getVariantStock, sizeHasStock, colorHasStock,
