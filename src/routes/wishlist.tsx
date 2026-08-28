@@ -155,7 +155,8 @@ function WishlistRow({ product, index }: { product: Product; index: number }) {
   const add = () => {
     if (soldOut) return;
     addToCart({ productId: product.id, size, color, qty: Math.min(qty, stock) });
-    toast.success(`${product.name} added`, { description: `${size} · ${color} · ×${Math.min(qty, stock)}` });
+    toast.success(`${product.name} added to your bag`, { description: `${size} · ${color} · ×${Math.min(qty, stock)}` });
+    openCartDrawer();
   };
 
   return (
@@ -236,7 +237,7 @@ function WishlistRow({ product, index }: { product: Product; index: number }) {
         </button>
         <button
           type="button"
-          onClick={() => { toggleWishlist(product.id); toast.success("Removed from wishlist"); }}
+          onClick={() => removeWithUndo(product)}
           className="chip text-xs hover:bg-destructive hover:text-white transition"
         >
           <Trash2 size={12}/> Remove
