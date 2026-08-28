@@ -1,16 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import { ProductCard } from "@/components/ProductCard";
-import { useProducts, useWishlist, useUser, addToCart } from "@/lib/store";
+import {
+  useProducts, useWishlist, useUser, addToCart, toggleWishlist,
+  formatPrice, getVariantStock, sizeHasStock, colorHasStock,
+} from "@/lib/store";
+import type { Product } from "@/lib/types";
 import { useMemo, useState } from "react";
-import { Heart, Share2, Copy, Check, ShoppingBag, X, Twitter, Facebook, MessageCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Share2, Copy, Check, ShoppingBag, X, Twitter, Facebook, MessageCircle, Trash2, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/wishlist")({
   head: () => ({
     meta: [
-      { title: "Wishlist — GenZ" },
-      { name: "description", content: "Your saved products on GenZ Streetwear." },
+      { title: "Wishlist — Saved Streetwear Picks | GenZ" },
+      { name: "description", content: "View your saved products, pick sizes and colors, check live availability, and move favorites straight into your bag." },
+      { property: "og:title", content: "Wishlist — Saved Streetwear Picks | GenZ" },
+      { property: "og:description", content: "Your saved GenZ picks with live stock and one-tap add to bag." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Wishlist,
@@ -21,10 +29,14 @@ function Wishlist() {
   const products = useProducts();
   const user = useUser();
   const [shareOpen, setShareOpen] = useState(false);
+
   const items = useMemo(
-    () => wish.map((id) => products.find((p) => p.id === id)).filter((p): p is NonNullable<typeof p> => !!p),
+    () => wish.map((id) => products.find((p) => p.id === id)).filter((p): p is Product => !!p),
     [wish, products],
   );
+
+  const totalValue = items.reduce((s, p) => s + p.price, 0);
+  const inStockCount = items.filter((p) => p.stock > 0).length;
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -38,12 +50,19 @@ function Wishlist() {
   const addAll = () => {
     let n = 0;
     items.forEach((p) => {
-      if (p.stock > 0) {
-        addToCart({ productId: p.id, size: p.sizes[0], color: p.colors[0], qty: 1 });
+      const size = p.sizes.find((s) => sizeHasStock(p, s));
+      const color = p.colors.find((c) => colorHasStock(p, c));
+      if (size && color && getVariantStock(p, size, color) > 0) {
+        addToCart({ productId: p.id, size, color, qty: 1 });
         n++;
       }
     });
-    toast.success(n > 0 ? `Added ${n} to your bag` : "All items sold out");
+    toast.success(n > 0 ? `Added ${n} item${n === 1 ? "" : "s"} to your bag` : "No available variants to add");
+  };
+
+  const clearAll = () => {
+    items.forEach((p) => toggleWishlist(p.id));
+    toast.success("Wishlist cleared");
   };
 
   const nativeShare = async () => {
@@ -64,13 +83,17 @@ function Wishlist() {
             <h1 className="text-5xl flex items-center gap-3">
               <Heart className="fill-pop-pink text-pop-pink" size={40}/> Wishlist
             </h1>
-            <p className="text-muted-foreground mt-1">{items.length} saved item{items.length === 1 ? "" : "s"}</p>
+            <p className="text-muted-foreground mt-1">
+              {items.length} saved item{items.length === 1 ? "" : "s"}
+              {items.length > 0 && <> · {inStockCount} in stock · {formatPrice(totalValue)} total</>}
+            </p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {items.length > 0 && (
               <>
-                <button onClick={addAll} className="btn-pop ghost"><ShoppingBag size={16}/> Add all</button>
+                <button onClick={addAll} className="btn-pop ghost"><ShoppingBag size={16}/> Add all available</button>
                 <button onClick={nativeShare} className="btn-pop"><Share2 size={16}/> Share</button>
+                <button onClick={clearAll} className="btn-pop ghost"><Trash2 size={16}/> Clear</button>
               </>
             )}
             <Link to="/shop" className="btn-pop ghost">Keep shopping</Link>
@@ -84,14 +107,123 @@ function Wishlist() {
             <Link to="/shop" className="btn-pop">Discover drops</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {items.map((p, i) => <ProductCard key={p.id} product={p} index={i}/>)}
+          <div className="grid gap-4">
+            <AnimatePresence initial={false}>
+              {items.map((p, i) => (
+                <WishlistRow key={p.id} product={p} index={i}/>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </section>
 
       {shareOpen && <ShareModal url={shareUrl} onClose={() => setShareOpen(false)}/>}
     </Layout>
+  );
+}
+
+function WishlistRow({ product, index }: { product: Product; index: number }) {
+  const firstSize = product.sizes.find((s) => sizeHasStock(product, s)) ?? product.sizes[0] ?? "";
+  const firstColor = product.colors.find((c) => colorHasStock(product, c)) ?? product.colors[0] ?? "";
+  const [size, setSize] = useState(firstSize);
+  const [color, setColor] = useState(firstColor);
+  const [qty, setQty] = useState(1);
+
+  const stock = getVariantStock(product, size, color);
+  const soldOut = stock <= 0;
+  const maxQty = Math.max(1, Math.min(stock, 10));
+
+  const add = () => {
+    if (soldOut) return;
+    addToCart({ productId: product.id, size, color, qty: Math.min(qty, stock) });
+    toast.success(`${product.name} added`, { description: `${size} · ${color} · ×${Math.min(qty, stock)}` });
+  };
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      transition={{ duration: 0.28, delay: Math.min(index, 6) * 0.03 }}
+      className="sticker rounded-2xl bg-white p-4 grid gap-4 md:grid-cols-[120px_1fr_auto]"
+    >
+      <Link to="/product/$slug" params={{ slug: product.slug }} className="block">
+        <img src={product.image} alt={product.name} width={240} height={240} loading="lazy"
+             className="h-28 w-28 md:h-30 md:w-30 rounded-xl border-[3px] border-ink object-cover bg-pop-cyan"/>
+      </Link>
+
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Link to="/product/$slug" params={{ slug: product.slug }} className="font-bold text-lg hover:underline truncate block">
+              {product.name}
+            </Link>
+            <div className="text-xs uppercase text-muted-foreground">{product.category}</div>
+          </div>
+          <div className="font-display text-2xl shrink-0">{formatPrice(product.price)}</div>
+        </div>
+
+        <div className="mt-3 grid sm:grid-cols-2 gap-3">
+          <div>
+            <div className="text-[11px] uppercase font-bold mb-1">Size</div>
+            <div className="flex flex-wrap gap-1.5">
+              {product.sizes.map((s) => {
+                const ok = sizeHasStock(product, s);
+                return (
+                  <button key={s} type="button" disabled={!ok} onClick={() => setSize(s)}
+                    className={`chip text-xs ${size === s ? "bg-ink text-paper" : ""} ${ok ? "" : "opacity-40 line-through cursor-not-allowed"}`}>
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase font-bold mb-1">Color</div>
+            <div className="flex flex-wrap gap-1.5">
+              {product.colors.map((c) => {
+                const ok = colorHasStock(product, c) && getVariantStock(product, size, c) > 0;
+                return (
+                  <button key={c} type="button" disabled={!colorHasStock(product, c)} onClick={() => setColor(c)}
+                    className={`chip text-xs ${color === c ? "bg-ink text-paper" : ""} ${ok ? "" : "opacity-40 line-through cursor-not-allowed"}`}>
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 text-xs font-bold">
+          {soldOut ? (
+            <span className="chip bg-destructive text-white">Sold out in this combo</span>
+          ) : stock <= 5 ? (
+            <span className="chip bg-pop-orange">Only {stock} left</span>
+          ) : (
+            <span className="chip bg-pop-cyan">In stock</span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex md:flex-col items-center md:items-end gap-2 justify-between">
+        <div className="flex items-center border-2 border-ink rounded-full">
+          <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-2 py-1" aria-label="Decrease quantity"><Minus size={12}/></button>
+          <span className="px-2 font-bold text-sm">{Math.min(qty, maxQty)}</span>
+          <button type="button" onClick={() => setQty((q) => Math.min(maxQty, q + 1))} className="px-2 py-1" aria-label="Increase quantity"><Plus size={12}/></button>
+        </div>
+        <button type="button" onClick={add} disabled={soldOut} className={`btn-pop whitespace-nowrap ${soldOut ? "opacity-50 cursor-not-allowed" : ""}`}>
+          <ShoppingBag size={16}/> Add to bag
+        </button>
+        <button
+          type="button"
+          onClick={() => { toggleWishlist(product.id); toast.success("Removed from wishlist"); }}
+          className="chip text-xs hover:bg-destructive hover:text-white transition"
+        >
+          <Trash2 size={12}/> Remove
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
