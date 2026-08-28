@@ -24,6 +24,20 @@ export const Route = createFileRoute("/wishlist")({
   component: Wishlist,
 });
 
+function removeWithUndo(product: Product) {
+  toggleWishlist(product.id);
+  toast(`Removed ${product.name} from wishlist`, {
+    duration: 5000,
+    action: {
+      label: "Undo",
+      onClick: () => {
+        toggleWishlist(product.id);
+        toast.success(`${product.name} restored`);
+      },
+    },
+  });
+}
+
 function Wishlist() {
   const wish = useWishlist();
   const products = useProducts();
