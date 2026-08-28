@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Layout } from "@/components/Layout";
+import { Layout, openCartDrawer } from "@/components/Layout";
 import {
   useProducts, useWishlist, useUser, addToCart, toggleWishlist,
   formatPrice, getVariantStock, sizeHasStock, colorHasStock,
@@ -23,6 +23,20 @@ export const Route = createFileRoute("/wishlist")({
   }),
   component: Wishlist,
 });
+
+function removeWithUndo(product: Product) {
+  toggleWishlist(product.id);
+  toast(`Removed ${product.name} from wishlist`, {
+    duration: 5000,
+    action: {
+      label: "Undo",
+      onClick: () => {
+        toggleWishlist(product.id);
+        toast.success(`${product.name} restored`);
+      },
+    },
+  });
+}
 
 function Wishlist() {
   const wish = useWishlist();
@@ -57,12 +71,27 @@ function Wishlist() {
         n++;
       }
     });
-    toast.success(n > 0 ? `Added ${n} item${n === 1 ? "" : "s"} to your bag` : "No available variants to add");
+    if (n > 0) {
+      toast.success(`Added ${n} item${n === 1 ? "" : "s"} to your bag`);
+      openCartDrawer();
+    } else {
+      toast.error("No available variants to add");
+    }
   };
 
   const clearAll = () => {
-    items.forEach((p) => toggleWishlist(p.id));
-    toast.success("Wishlist cleared");
+    const removed = [...items];
+    removed.forEach((p) => toggleWishlist(p.id));
+    toast(`Cleared ${removed.length} item${removed.length === 1 ? "" : "s"} from wishlist`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          removed.forEach((p) => toggleWishlist(p.id));
+          toast.success("Wishlist restored");
+        },
+      },
+    });
   };
 
   const nativeShare = async () => {
@@ -136,7 +165,8 @@ function WishlistRow({ product, index }: { product: Product; index: number }) {
   const add = () => {
     if (soldOut) return;
     addToCart({ productId: product.id, size, color, qty: Math.min(qty, stock) });
-    toast.success(`${product.name} added`, { description: `${size} · ${color} · ×${Math.min(qty, stock)}` });
+    toast.success(`${product.name} added to your bag`, { description: `${size} · ${color} · ×${Math.min(qty, stock)}` });
+    openCartDrawer();
   };
 
   return (
@@ -217,7 +247,7 @@ function WishlistRow({ product, index }: { product: Product; index: number }) {
         </button>
         <button
           type="button"
-          onClick={() => { toggleWishlist(product.id); toast.success("Removed from wishlist"); }}
+          onClick={() => removeWithUndo(product)}
           className="chip text-xs hover:bg-destructive hover:text-white transition"
         >
           <Trash2 size={12}/> Remove
