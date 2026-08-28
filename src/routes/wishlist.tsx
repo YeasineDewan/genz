@@ -71,7 +71,12 @@ function Wishlist() {
         n++;
       }
     });
-    toast.success(n > 0 ? `Added ${n} item${n === 1 ? "" : "s"} to your bag` : "No available variants to add");
+    if (n > 0) {
+      toast.success(`Added ${n} item${n === 1 ? "" : "s"} to your bag`);
+      openCartDrawer();
+    } else {
+      toast.error("No available variants to add");
+    }
   };
 
   const clearAll = () => {
