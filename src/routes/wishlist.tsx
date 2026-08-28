@@ -80,8 +80,18 @@ function Wishlist() {
   };
 
   const clearAll = () => {
-    items.forEach((p) => toggleWishlist(p.id));
-    toast.success("Wishlist cleared");
+    const removed = [...items];
+    removed.forEach((p) => toggleWishlist(p.id));
+    toast(`Cleared ${removed.length} item${removed.length === 1 ? "" : "s"} from wishlist`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          removed.forEach((p) => toggleWishlist(p.id));
+          toast.success("Wishlist restored");
+        },
+      },
+    });
   };
 
   const nativeShare = async () => {
