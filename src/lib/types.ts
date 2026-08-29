@@ -200,3 +200,12 @@ export interface Coupon {
   createdAt?: number;
   description?: string;
 }
+
+export interface StockAlert {
+  id: string;
+  productId: string;
+  size?: string;
+  color?: string;
+  email?: string;
+  at: number;
+}
