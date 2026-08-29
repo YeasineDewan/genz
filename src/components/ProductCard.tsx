@@ -4,6 +4,7 @@ import type { Product } from "@/lib/types";
 import { formatPrice, useProductRating } from "@/lib/store";
 import { Stars } from "./Stars";
 import { WishlistButton } from "./WishlistButton";
+import { CompareButton } from "./CompareButton";
 import { Eye } from "lucide-react";
 
 const tilts = ["-rotate-1", "rotate-1", "-rotate-2", "rotate-2", "rotate-0"];
