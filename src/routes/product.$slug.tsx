@@ -128,6 +128,7 @@ function ProductPage() {
   const [size, setSize] = useState(initialSize);
   const [color, setColor] = useState(initialColor);
   const [qty, setQty] = useState(1);
+  const [guideOpen, setGuideOpen] = useState(false);
   const rating = useProductRating(product.id);
   const variantStock = getVariantStock(product, size, color);
   const outOfStock = hasVariants ? variantStock === 0 : product.stock === 0;
@@ -229,7 +230,7 @@ function ProductPage() {
           <div className="mt-6">
             <div className="flex items-center justify-between mb-2">
               <div className="font-bold text-sm uppercase">Size <span className="text-muted-foreground font-normal normal-case">— {size}</span></div>
-              <Link to="/shop" className="text-xs underline text-muted-foreground hover:text-ink">Size guide</Link>
+              <button type="button" onClick={() => setGuideOpen(true)} className="text-xs underline text-muted-foreground hover:text-ink">Size guide</button>
             </div>
             <div className="flex flex-wrap gap-2">
               {product.sizes.map((s) => {
@@ -251,10 +252,15 @@ function ProductPage() {
                 🔥 Only <span className="font-display text-base">{variantStock}</span> left in {size} / {color}
               </p>
             )}
-            {hasVariants && outOfStock && (
-              <p className="text-xs font-bold text-destructive mt-2">
-                {size} / {color} is sold out — try another combination above.
-              </p>
+            {outOfStock && (
+              <div className="mt-3 space-y-2">
+                {hasVariants && (
+                  <p className="text-xs font-bold text-destructive">
+                    {size} / {color} is sold out — try another combination above.
+                  </p>
+                )}
+                <BackInStockButton productId={product.id} size={size} color={color}/>
+              </div>
             )}
           </div>
 
