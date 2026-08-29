@@ -29,6 +29,8 @@ const KEYS = {
   recent: "genz.recent",
   coupons: "genz.coupons",
   appliedCoupon: "genz.appliedCoupon",
+  compare: "genz.compare",
+  stockAlerts: "genz.stockAlerts",
 } as const;
 
 // Per-user extras not yet stored in Supabase. Keyed by Supabase user.id.
