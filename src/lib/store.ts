@@ -11,7 +11,7 @@ import type {
   Product, CartItem, User, Order, CategoryDef, OrderStatus, TrackingEvent,
   FunnelEvent, FunnelEventType, StockAuditEntry, StockChangeSource,
   Review, ReviewStatus, ReportReason, Coupon, CouponRedemption,
-  Address, UserPreferences, Notification,
+  Address, UserPreferences, Notification, StockAlert,
 } from "./types";
 
 
@@ -29,6 +29,8 @@ const KEYS = {
   recent: "genz.recent",
   coupons: "genz.coupons",
   appliedCoupon: "genz.appliedCoupon",
+  compare: "genz.compare",
+  stockAlerts: "genz.stockAlerts",
 } as const;
 
 // Per-user extras not yet stored in Supabase. Keyed by Supabase user.id.
@@ -946,3 +948,40 @@ export const useAppliedCoupon = () => useStore(getAppliedCoupon);
 
 // Re-export for type-only clarity
 export const _noop = () => useCallback(() => {}, []);
+
+// --- Compare list (max 4, per browser) ---
+export const COMPARE_MAX = 4;
+export const getCompare = (): string[] => read<string[]>(KEYS.compare, []);
+export const toggleCompare = (productId: string): { added: boolean; full: boolean } => {
+  const cur = getCompare();
+  if (cur.includes(productId)) {
+    write(KEYS.compare, cur.filter((id) => id !== productId));
+    return { added: false, full: false };
+  }
+  if (cur.length >= COMPARE_MAX) return { added: false, full: true };
+  write(KEYS.compare, [...cur, productId]);
+  return { added: true, full: false };
+};
+export const removeCompare = (productId: string) =>
+  write(KEYS.compare, getCompare().filter((id) => id !== productId));
+export const clearCompare = () => write(KEYS.compare, []);
+export const useCompare = () => useStore(getCompare);
+
+// --- Back-in-stock alerts ---
+export const getStockAlerts = (): StockAlert[] => read<StockAlert[]>(KEYS.stockAlerts, []);
+export const hasStockAlert = (productId: string, size?: string, color?: string) =>
+  getStockAlerts().some((a) => a.productId === productId && a.size === size && a.color === color);
+export const addStockAlert = (a: Omit<StockAlert, "id" | "at">): StockAlert | null => {
+  if (hasStockAlert(a.productId, a.size, a.color)) return null;
+  const entry: StockAlert = { ...a, id: `al-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: Date.now() };
+  write(KEYS.stockAlerts, [entry, ...getStockAlerts()]);
+  return entry;
+};
+export const removeStockAlert = (id: string) =>
+  write(KEYS.stockAlerts, getStockAlerts().filter((a) => a.id !== id));
+export const removeStockAlertFor = (productId: string, size?: string, color?: string) =>
+  write(
+    KEYS.stockAlerts,
+    getStockAlerts().filter((a) => !(a.productId === productId && a.size === size && a.color === color)),
+  );
+export const useStockAlerts = () => useStore(getStockAlerts);

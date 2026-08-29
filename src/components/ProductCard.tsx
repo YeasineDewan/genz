@@ -4,6 +4,7 @@ import type { Product } from "@/lib/types";
 import { formatPrice, useProductRating } from "@/lib/store";
 import { Stars } from "./Stars";
 import { WishlistButton } from "./WishlistButton";
+import { CompareButton } from "./CompareButton";
 import { Eye } from "lucide-react";
 
 const tilts = ["-rotate-1", "rotate-1", "-rotate-2", "rotate-2", "rotate-0"];
@@ -42,6 +43,7 @@ export function ProductCard({
             <Eye size={16}/>
           </button>
         )}
+        <CompareButton productId={product.id}/>
       </div>
 
       <Link to="/product/$slug" params={{ slug: product.slug }} className={`block sticker rounded-2xl overflow-hidden bg-white hover:translate-y-[-3px] transition ${tilt} hover:rotate-0`}>

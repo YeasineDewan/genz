@@ -3,6 +3,7 @@ import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { CartDrawer } from "./CartDrawer";
 import { SupportChatHead } from "./SupportChatHead";
+import { CompareBar } from "./CompareBar";
 import { useEnsureSeeded } from "@/lib/store";
 
 export const OPEN_CART_EVENT = "genz:open-cart";
@@ -28,6 +29,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <Footer />
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
       <SupportChatHead />
+      <CompareBar />
+
     </div>
   );
 }
