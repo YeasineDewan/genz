@@ -43,6 +43,7 @@ export function ProductCard({
             <Eye size={16}/>
           </button>
         )}
+        <CompareButton productId={product.id}/>
       </div>
 
       <Link to="/product/$slug" params={{ slug: product.slug }} className={`block sticker rounded-2xl overflow-hidden bg-white hover:translate-y-[-3px] transition ${tilt} hover:rotate-0`}>
