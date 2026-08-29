@@ -6,6 +6,9 @@ import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { RelatedCarousel } from "@/components/RelatedCarousel";
 
 import { WishlistButton } from "@/components/WishlistButton";
+import { CompareButton } from "@/components/CompareButton";
+import { BackInStockButton } from "@/components/BackInStockButton";
+import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { Stars } from "@/components/Stars";
 import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, sizeHasStock, colorHasStock } from "@/lib/store";
 import { useEffect, useMemo, useState } from "react";
