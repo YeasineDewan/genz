@@ -7,7 +7,16 @@ import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 
-type ShopSearch = { category?: Category | "all"; q?: string; sort?: "new" | "price-asc" | "price-desc" };
+type ShopSearch = {
+  category?: Category | "all";
+  q?: string;
+  sort?: "new" | "price-asc" | "price-desc" | "rating";
+  min?: number;
+  max?: number;
+  size?: string;
+  color?: string;
+  stock?: "all" | "in";
+};
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
