@@ -31,6 +31,11 @@ export const Route = createFileRoute("/shop")({
     category: (s.category as ShopSearch["category"]) ?? "all",
     q: (s.q as string) ?? "",
     sort: (s.sort as ShopSearch["sort"]) ?? "new",
+    min: s.min != null ? Number(s.min) : undefined,
+    max: s.max != null ? Number(s.max) : undefined,
+    size: (s.size as string) || undefined,
+    color: (s.color as string) || undefined,
+    stock: (s.stock as ShopSearch["stock"]) ?? "all",
   }),
   component: Shop,
 });
@@ -39,7 +44,27 @@ function Shop() {
   const search = useSearch({ from: "/shop" });
   const navigate = useNavigate({ from: "/shop" });
   const products = useProducts();
+  const reviews = useReviews();
   const [quickView, setQuickView] = useState<Product | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const allSizes = useMemo(
+    () => [...new Set(products.flatMap((p) => p.sizes))],
+    [products],
+  );
+  const allColors = useMemo(
+    () => [...new Set(products.flatMap((p) => p.colors))],
+    [products],
+  );
+  const priceBounds = useMemo(() => {
+    const prices = products.map((p) => p.price);
+    return { min: Math.floor(Math.min(...prices, 0)), max: Math.ceil(Math.max(...prices, 100)) };
+  }, [products]);
+
+  const ratingOf = (id: string) => {
+    const rs = reviews.filter((r) => r.productId === id && (r.status ?? "approved") === "approved");
+    return rs.length ? rs.reduce((s, r) => s + r.rating, 0) / rs.length : 0;
+  };
 
   const filtered = useMemo(() => {
     let r = products;
@@ -48,10 +73,21 @@ function Shop() {
       const q = search.q.toLowerCase();
       r = r.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q));
     }
+    if (typeof search.min === "number" && !Number.isNaN(search.min)) r = r.filter((p) => p.price >= search.min!);
+    if (typeof search.max === "number" && !Number.isNaN(search.max)) r = r.filter((p) => p.price <= search.max!);
+    if (search.size) r = r.filter((p) => p.sizes.includes(search.size!) && sizeHasStock(p, search.size!));
+    if (search.color) r = r.filter((p) => p.colors.includes(search.color!));
+    if (search.stock === "in") r = r.filter((p) => p.stock > 0);
     if (search.sort === "price-asc") r = [...r].sort((a, b) => a.price - b.price);
     if (search.sort === "price-desc") r = [...r].sort((a, b) => b.price - a.price);
+    if (search.sort === "rating") r = [...r].sort((a, b) => ratingOf(b.id) - ratingOf(a.id));
     return r;
-  }, [products, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, search, reviews]);
+
+  const activeFilters =
+    (search.size ? 1 : 0) + (search.color ? 1 : 0) + (search.stock === "in" ? 1 : 0) +
+    (search.min != null ? 1 : 0) + (search.max != null ? 1 : 0);
 
   const cats: { label: string; value: ShopSearch["category"] }[] = [
     { label: "All", value: "all" },
