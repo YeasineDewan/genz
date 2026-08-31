@@ -2,7 +2,7 @@ import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router"
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
-import { useProducts } from "@/lib/store";
+import { useProducts, useReviews, sizeHasStock } from "@/lib/store";
 import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
