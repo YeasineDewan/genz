@@ -6,6 +6,7 @@ import { useProducts, useReviews, sizeHasStock } from "@/lib/store";
 import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
+import { SlidersHorizontal } from "lucide-react";
 
 type ShopSearch = {
   category?: Category | "all";
