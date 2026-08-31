@@ -283,7 +283,8 @@ function ProductPage() {
             <p className="text-xs text-muted-foreground mt-2">Max available: {variantStock}</p>
           )}
 
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2 items-center">
+            <CompareButton productId={product.id} label/>
             <button
               onClick={async () => {
                 const url = typeof window !== "undefined" ? window.location.href : "";
@@ -341,6 +342,7 @@ function ProductPage() {
 
 
       <RecentlyViewed excludeId={product.id}/>
+      <SizeGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} category={product.category}/>
     </Layout>
   );
 }
