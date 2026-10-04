@@ -126,7 +126,7 @@ export function Header({ onCartClick }: { onCartClick: () => void }) {
           </div>
 
           <button
-            onClick={onCartClick}
+            onClick={onCartClick} aria-label="Open cart"
             className="relative h-11 px-4 rounded-full border-[3px] border-ink bg-pop-pink text-white font-bold shadow-sticker-sm hover:translate-x-[-2px] hover:translate-y-[-2px] transition flex items-center gap-2"
           >
             <ShoppingBag size={18} />

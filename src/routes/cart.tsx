@@ -50,9 +50,9 @@ function CartPage() {
                       <div className="text-xs text-muted-foreground">{item.size} · {item.color}</div>
                       <div className="mt-3 flex items-center gap-3">
                         <div className="flex items-center border-2 border-ink rounded-full">
-                          <button onClick={() => updateCartQty(i, item.qty - 1)} className="px-2 py-1"><Minus size={12}/></button>
+                          <button onClick={() => updateCartQty(i, item.qty - 1)} aria-label="Decrease quantity" className="px-2 py-1"><Minus size={12}/></button>
                           <span className="px-2 font-bold text-sm">{item.qty}</span>
-                          <button onClick={() => updateCartQty(i, item.qty + 1)} className="px-2 py-1"><Plus size={12}/></button>
+                          <button onClick={() => updateCartQty(i, item.qty + 1)} aria-label="Increase quantity" className="px-2 py-1"><Plus size={12}/></button>
                         </div>
                         <button onClick={() => removeFromCart(i)} className="text-muted-foreground hover:text-destructive flex items-center gap-1 text-sm"><Trash2 size={14}/> Remove</button>
                       </div>

@@ -1,0 +1,9 @@
+# GenZ — Loud Streetwear
+
+> Pop-art streetwear store for the chronically online: tees, hoodies, bottoms, shoes and accessories.
+
+## Pages
+
+- [Home](/): New drops, trending and top-rated pieces.
+- [Shop](/shop): Full catalog with category, price, size and color filters.
+- [Compare](/compare): Side-by-side product comparison.

@@ -182,7 +182,7 @@ function Index() {
           className="sticker rounded-3xl bg-pop-pink text-white p-8 md:p-10 relative overflow-hidden"
         >
           <span className="chip bg-white text-ink">LIMITED</span>
-          <h3 className="font-display text-4xl mt-3">Members-only drop</h3>
+          <h2 className="font-display text-4xl mt-3">Members-only drop</h2>
           <p className="mt-2 max-w-sm">Sign up & get 10% off your first order + early access to the next drop.</p>
           <Link to="/signup" className="btn-pop mt-5 inline-flex bg-white text-ink">Join GenZ</Link>
           <div className="absolute -bottom-6 -right-6 text-[10rem] opacity-20 leading-none">★</div>
@@ -192,7 +192,7 @@ function Index() {
           className="sticker rounded-3xl bg-pop-yellow p-8 md:p-10 relative overflow-hidden"
         >
           <span className="chip bg-ink text-white">FREE</span>
-          <h3 className="font-display text-4xl mt-3">Shipping over $80</h3>
+          <h2 className="font-display text-4xl mt-3">Shipping over $80</h2>
           <p className="mt-2 max-w-sm">Stack the bag. Save the dollars. We'll get it to your door fast.</p>
           <Link to="/shop" className="btn-pop mt-5 inline-flex">Start shopping</Link>
           <div className="absolute -bottom-6 -right-6 text-[10rem] opacity-20 leading-none">🚚</div>
@@ -296,7 +296,7 @@ function Index() {
           initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
           className="sticker rounded-3xl bg-ink text-paper p-10 md:p-14 text-center relative overflow-hidden"
         >
-          <h3 className="font-display text-4xl md:text-5xl">Get on the list.</h3>
+          <h2 className="font-display text-4xl md:text-5xl">Get on the list.</h2>
           <p className="mt-3 max-w-md mx-auto opacity-80">First to know about drops, restocks, and members-only deals.</p>
           <form
             onSubmit={(e) => { e.preventDefault(); (e.currentTarget as HTMLFormElement).reset(); }}

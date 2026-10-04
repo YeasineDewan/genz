@@ -43,6 +43,27 @@ export const Route = createRootRoute({
         href: appCss,
       },
     ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify({
+          "@context": "https://schema.org",
+          "@graph": [
+            { "@type": "Organization", name: "GenZ", url: "https://gentle-store-forge.lovable.app" },
+            {
+              "@type": "WebSite",
+              name: "GenZ — Loud Streetwear",
+              url: "https://gentle-store-forge.lovable.app",
+              potentialAction: {
+                "@type": "SearchAction",
+                target: "https://gentle-store-forge.lovable.app/shop?q={search_term_string}",
+                "query-input": "required name=search_term_string",
+              },
+            },
+          ],
+        }),
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

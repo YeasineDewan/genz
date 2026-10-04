@@ -122,7 +122,7 @@ function Shop() {
             >
               <SlidersHorizontal size={14}/> Filters{activeFilters > 0 ? ` · ${activeFilters}` : ""}
             </button>
-            <select
+            <select aria-label="Sort products"
               value={search.sort}
               onChange={(e) => navigate({ search: (s: ShopSearch) => ({ ...s, sort: e.target.value as ShopSearch["sort"] }) })}
               className="sticker-sm rounded-full px-4 py-2 bg-white font-bold text-sm"

@@ -263,7 +263,7 @@ function Checkout() {
       ].map((s, i) => (
         <div key={s.n} className="flex items-center gap-2 flex-1">
           <button
-            type="button"
+            type="button" aria-label={`Go to checkout step ${s.n}`}
             onClick={() => s.n < step && setStep(s.n as 1 | 2 | 3)}
             className={`flex items-center gap-2 ${s.n <= step ? "" : "opacity-50"}`}
           >
