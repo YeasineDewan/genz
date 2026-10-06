@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { downloadInvoice } from "@/lib/invoice";
+import { syncOrderStatus } from "@/lib/orders-db";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminSeen } from "@/lib/support-unread";
 
@@ -1034,7 +1035,7 @@ function OrderRow({ o, onDetails }: { o: Order; onDetails: () => void }) {
           <div className="font-display text-2xl">{formatPrice(o.total)}</div>
           <select
             value={o.status}
-            onChange={(e) => { updateOrderStatus(o.id, e.target.value as OrderStatus, "Updated by admin"); toast.success("Status updated"); }}
+            onChange={(e) => { updateOrderStatus(o.id, e.target.value as OrderStatus, "Updated by admin"); void syncOrderStatus(o.id, e.target.value); toast.success("Status updated"); }}
             className="mt-2 rounded-full border-[3px] border-ink bg-pop-yellow font-bold text-sm px-3 py-1"
           >
             {ORDER_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
