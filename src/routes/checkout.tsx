@@ -7,6 +7,7 @@ import {
 } from "@/lib/store";
 import { useEffect, useMemo, useState, forwardRef } from "react";
 import { toast } from "sonner";
+import { syncOrderToBackend } from "@/lib/orders-db";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -245,6 +246,7 @@ function Checkout() {
           deliveryMethod: delivery,
         },
       });
+      if (order) void syncOrderToBackend(order, products);
       clearCart();
       setAppliedCoupon(null);
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
