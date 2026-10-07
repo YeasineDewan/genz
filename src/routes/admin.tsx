@@ -31,6 +31,7 @@ import {
 import { toast } from "sonner";
 import { downloadInvoice } from "@/lib/invoice";
 import { syncOrderStatus } from "@/lib/orders-db";
+import { AdminLiveOrders } from "@/components/LiveOrdersPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminSeen } from "@/lib/support-unread";
 
@@ -921,6 +922,7 @@ function Orders() {
 
   return (
     <div className="space-y-4">
+      <AdminLiveOrders/>
       <div className="sticker rounded-2xl bg-white p-3 flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[220px] flex items-center gap-2 px-3 rounded-xl border-2 border-ink/20">
           <Search size={16}/>
