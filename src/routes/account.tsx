@@ -1,3 +1,4 @@
+import { CustomerOrderHistory } from "@/components/LiveOrdersPanel";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRequireAuth } from "@/lib/auth-guard";
 import { Layout } from "@/components/Layout";
@@ -528,6 +529,7 @@ function OrdersTab() {
   return (
     <div className="space-y-4">
       <PageHeader title="Your orders" subtitle={`${orders.length} total`} />
+      <CustomerOrderHistory />
       <div className="sticker rounded-2xl bg-white p-3 flex flex-wrap gap-2">
         <div className="flex-1 min-w-[200px] flex items-center gap-2 px-3 rounded-xl border-2 border-ink/20">
           <Search size={16}/>
