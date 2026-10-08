@@ -2,7 +2,7 @@ import { createFileRoute, useSearch, useNavigate } from "@tanstack/react-router"
 import { Layout } from "@/components/Layout";
 import { ProductCard } from "@/components/ProductCard";
 import { QuickViewModal } from "@/components/QuickViewModal";
-import { useProducts, useReviews, sizeHasStock } from "@/lib/store";
+import { useProducts, useReviews, sizeHasStock, colorHasStock } from "@/lib/store";
 import type { Category, Product } from "@/lib/types";
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
@@ -77,7 +77,7 @@ function Shop() {
     if (typeof search.min === "number" && !Number.isNaN(search.min)) r = r.filter((p) => p.price >= search.min!);
     if (typeof search.max === "number" && !Number.isNaN(search.max)) r = r.filter((p) => p.price <= search.max!);
     if (search.size) r = r.filter((p) => p.sizes.includes(search.size!) && sizeHasStock(p, search.size!));
-    if (search.color) r = r.filter((p) => p.colors.includes(search.color!));
+    if (search.color) r = r.filter((p) => p.colors.includes(search.color!) && colorHasStock(p, search.color!));
     if (search.stock === "in") r = r.filter((p) => p.stock > 0);
     if (search.sort === "price-asc") r = [...r].sort((a, b) => a.price - b.price);
     if (search.sort === "price-desc") r = [...r].sort((a, b) => b.price - a.price);

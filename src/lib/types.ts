@@ -11,6 +11,8 @@ export interface VariantStock {
   size: string;
   color: string;
   stock: number;
+  price?: number;     // optional per-variant price override
+  active?: boolean;   // false = hidden/unavailable in the shop
 }
 
 export interface Product {
