@@ -905,7 +905,10 @@ export const useLoyalty = () => {
 };
 
 export const cartTotal = (cart: CartItem[], products: Product[]) =>
-  cart.reduce((sum, i) => sum + (products.find((p) => p.id === i.productId)?.price ?? 0) * i.qty, 0);
+  cart.reduce((sum, i) => {
+    const p = products.find((x) => x.id === i.productId);
+    return sum + (p ? getVariantPrice(p, i.size, i.color) : 0) * i.qty;
+  }, 0);
 
 export const cartCount = (cart: CartItem[]) => cart.reduce((n, i) => n + i.qty, 0);
 
@@ -928,17 +931,21 @@ export const formatPrice = (n: number) =>
 export const getVariantStock = (p: Product, size: string, color: string): number => {
   if (!p.variants || p.variants.length === 0) return p.stock;
   const v = p.variants.find((x) => x.size === size && x.color === color);
-  return v ? v.stock : 0;
+  return v && v.active !== false ? v.stock : 0;
+};
+export const getVariantPrice = (p: Product, size: string, color: string): number => {
+  const v = p.variants?.find((x) => x.size === size && x.color === color);
+  return typeof v?.price === "number" && v.price > 0 ? v.price : p.price;
 };
 export const isVariantAvailable = (p: Product, size: string, color: string) =>
   getVariantStock(p, size, color) > 0;
 export const sizeHasStock = (p: Product, size: string): boolean => {
   if (!p.variants || p.variants.length === 0) return p.stock > 0;
-  return p.variants.some((v) => v.size === size && v.stock > 0);
+  return p.variants.some((v) => v.size === size && v.stock > 0 && v.active !== false);
 };
 export const colorHasStock = (p: Product, color: string): boolean => {
   if (!p.variants || p.variants.length === 0) return p.stock > 0;
-  return p.variants.some((v) => v.color === color && v.stock > 0);
+  return p.variants.some((v) => v.color === color && v.stock > 0 && v.active !== false);
 };
 
 // --- Applied coupon (persists across cart/checkout) ---

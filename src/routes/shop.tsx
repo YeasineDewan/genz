@@ -77,7 +77,7 @@ function Shop() {
     if (typeof search.min === "number" && !Number.isNaN(search.min)) r = r.filter((p) => p.price >= search.min!);
     if (typeof search.max === "number" && !Number.isNaN(search.max)) r = r.filter((p) => p.price <= search.max!);
     if (search.size) r = r.filter((p) => p.sizes.includes(search.size!) && sizeHasStock(p, search.size!));
-    if (search.color) r = r.filter((p) => p.colors.includes(search.color!));
+    if (search.color) r = r.filter((p) => p.colors.includes(search.color!) && colorHasStock(p, search.color!));
     if (search.stock === "in") r = r.filter((p) => p.stock > 0);
     if (search.sort === "price-asc") r = [...r].sort((a, b) => a.price - b.price);
     if (search.sort === "price-desc") r = [...r].sort((a, b) => b.price - a.price);

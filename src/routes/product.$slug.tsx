@@ -199,7 +199,7 @@ function ProductPage() {
           </div>
           <h1 className="text-5xl">{product.name}</h1>
           <div className="mt-2"><Stars value={rating.avg} size={16} count={rating.count}/></div>
-          <div className="mt-3 font-display text-3xl">{formatPrice(product.price)}</div>
+          <div className="mt-3 font-display text-3xl">{formatPrice(getVariantPrice(product, size, color))}</div>
           <p className="mt-5 text-muted-foreground">{product.description}</p>
 
           <div className="mt-6">
