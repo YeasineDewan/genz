@@ -29,7 +29,6 @@ import { Route as ApiChatSupportRouteImport } from './routes/api/chat-support'
 import { Route as OrderIdRouteImport } from './routes/order.$id'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as WishlistShareRouteImport } from './routes/wishlist_.share'
-import { Route as ApiPublicProvisionDemoRouteImport } from './routes/api/public/provision-demo'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -131,11 +130,6 @@ const WishlistShareRoute = WishlistShareRouteImport.update({
   path: '/wishlist/share',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicProvisionDemoRoute = ApiPublicProvisionDemoRouteImport.update({
-  id: '/api/public/provision-demo',
-  path: '/api/public/provision-demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -158,7 +152,6 @@ export interface FileRoutesByFullPath {
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
-  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -181,7 +174,6 @@ export interface FileRoutesByTo {
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist/share': typeof WishlistShareRoute
-  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -205,7 +197,6 @@ export interface FileRoutesById {
   '/order/$id': typeof OrderIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/wishlist_/share': typeof WishlistShareRoute
-  '/api/public/provision-demo': typeof ApiPublicProvisionDemoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -230,7 +221,6 @@ export interface FileRouteTypes {
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
-    | '/api/public/provision-demo'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -253,7 +243,6 @@ export interface FileRouteTypes {
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist/share'
-    | '/api/public/provision-demo'
   id:
     | '__root__'
     | '/'
@@ -276,7 +265,6 @@ export interface FileRouteTypes {
     | '/order/$id'
     | '/product/$slug'
     | '/wishlist_/share'
-    | '/api/public/provision-demo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -300,7 +288,6 @@ export interface RootRouteChildren {
   OrderIdRoute: typeof OrderIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
   WishlistShareRoute: typeof WishlistShareRoute
-  ApiPublicProvisionDemoRoute: typeof ApiPublicProvisionDemoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -445,13 +432,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WishlistShareRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/provision-demo': {
-      id: '/api/public/provision-demo'
-      path: '/api/public/provision-demo'
-      fullPath: '/api/public/provision-demo'
-      preLoaderRoute: typeof ApiPublicProvisionDemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -476,7 +456,6 @@ const rootRouteChildren: RootRouteChildren = {
   OrderIdRoute: OrderIdRoute,
   ProductSlugRoute: ProductSlugRoute,
   WishlistShareRoute: WishlistShareRoute,
-  ApiPublicProvisionDemoRoute: ApiPublicProvisionDemoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

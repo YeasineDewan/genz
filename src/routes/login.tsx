@@ -11,7 +11,7 @@ type LoginSearch = { redirect?: string };
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — GenZ" }] }),
   validateSearch: (s: Record<string, unknown>): LoginSearch => ({
-    redirect: typeof s.redirect === "string" ? s.redirect : undefined,
+    redirect: typeof s.redirect === "string" && /^\/(?![\/\\])/.test(s.redirect) ? s.redirect : undefined,
   }),
   component: Login,
 });
