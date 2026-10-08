@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { downloadInvoice } from "@/lib/invoice";
 import { syncOrderStatus } from "@/lib/orders-db";
 import { AdminLiveOrders } from "@/components/LiveOrdersPanel";
+import { PricingPanel } from "@/components/admin/PricingPanel";
 import { supabase } from "@/integrations/supabase/client";
 import { useAdminSeen } from "@/lib/support-unread";
 
@@ -40,7 +41,7 @@ export const Route = createFileRoute("/admin")({
   component: Admin,
 });
 
-type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "coupons" | "reviews" | "recommendations" | "security";
+type Tab = "dashboard" | "products" | "categories" | "orders" | "inventory" | "pricing" | "coupons" | "reviews" | "recommendations" | "security";
 
 const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number }>; hint: string }[] = [
   { key: "dashboard", label: "Dashboard", Icon: LayoutDashboard, hint: "Overview & KPIs" },
@@ -48,6 +49,7 @@ const TABS: { key: Tab; label: string; Icon: React.ComponentType<{ size?: number
   { key: "categories", label: "Categories", Icon: Tag, hint: "Taxonomy" },
   { key: "orders", label: "Orders", Icon: Truck, hint: "Fulfillment" },
   { key: "inventory", label: "Inventory", Icon: Boxes, hint: "Stock audit" },
+  { key: "pricing", label: "Pricing", Icon: Boxes, hint: "Price & stock per variant" },
   { key: "coupons", label: "Coupons", Icon: Ticket, hint: "Promotions" },
   { key: "reviews", label: "Reviews", Icon: MessageSquare, hint: "Moderation" },
   { key: "recommendations", label: "Recommendations", Icon: Sparkles, hint: "Impressions & clicks" },
@@ -142,6 +144,7 @@ function Admin() {
             {tab === "categories" && <Categories/>}
             {tab === "orders" && <Orders/>}
             {tab === "inventory" && <Inventory/>}
+            {tab === "pricing" && <PricingPanel/>}
             {tab === "coupons" && <Coupons/>}
             {tab === "reviews" && <ReviewsModeration/>}
             {tab === "recommendations" && <RecommendationsAdmin/>}
