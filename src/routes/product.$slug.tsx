@@ -10,7 +10,7 @@ import { CompareButton } from "@/components/CompareButton";
 import { BackInStockButton } from "@/components/BackInStockButton";
 import { SizeGuideModal } from "@/components/SizeGuideModal";
 import { Stars } from "@/components/Stars";
-import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, sizeHasStock, colorHasStock } from "@/lib/store";
+import { useProducts, addToCart, formatPrice, trackRecent, useProductRating, getVariantStock, getVariantPrice, sizeHasStock, colorHasStock } from "@/lib/store";
 import { useEffect, useMemo, useState } from "react";
 import { ShoppingBag, Truck, RotateCcw, Shield, Share2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
